@@ -38,9 +38,9 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     useEffect(() => {
         const canvas = canvasRef.current;
         const gl = canvas.getContext('webgl2', {
-            antialias: false,  // 안티앨리어싱 비활성화로 성능 향상
-            depth: false,      // depth testing 불필요
-            alpha: false       // alpha channel 불필요
+            antialias: true,  // 안티앨리어싱 비활성화로 성능 향상
+            depth: true,      // depth testing 불필요
+            alpha: true       // alpha channel 불필요
         });
         
         if (!gl) {
