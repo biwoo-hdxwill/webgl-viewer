@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as cornerstone from 'cornerstone-core';
 import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import dicomParser from 'dicom-parser';
-import WebGLViewer from './WebGLViewer';
+import WebGLViewer, { ViewTypes } from './WebGLViewer';
 
 function DicomViewer() {
     const fileInputRef = useRef(null);
@@ -10,7 +10,9 @@ function DicomViewer() {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [loadedImages, setLoadedImages] = useState([]);
     const [volumeData, setVolumeData] = useState(null);
-    const [sliceOffset, setSliceOffset] = useState(0.5);
+    const [axialOffset, setAxialOffset] = useState(0.5);
+    const [sagittalOffset, setSagittalOffset] = useState(0.5);
+    const [coronalOffset, setCoronalOffset] = useState(0.5);
 
     useEffect(() => {
         const initializeCornerstone = async () => {
@@ -101,7 +103,6 @@ function DicomViewer() {
                 const pixelData = image.getPixelData();
                 const offset = i * firstImage.width * firstImage.height;
                 
-                // 픽셀 데이터를 Float32Array로 변환하면서 복사
                 for (let j = 0; j < pixelData.length; j++) {
                     volumeBuffer[offset + j] = pixelData[j] / 255.0; // 정규화
                 }
@@ -126,7 +127,7 @@ function DicomViewer() {
     const handlePrevImage = () => {
         setCurrentImageIndex(prev => {
             const newIndex = prev > 0 ? prev - 1 : loadedImages.length - 1;
-            setSliceOffset(newIndex / (loadedImages.length - 1));
+            setAxialOffset(newIndex / (loadedImages.length - 1));
             return newIndex;
         });
     };
@@ -134,7 +135,7 @@ function DicomViewer() {
     const handleNextImage = () => {
         setCurrentImageIndex(prev => {
             const newIndex = prev < loadedImages.length - 1 ? prev + 1 : 0;
-            setSliceOffset(newIndex / (loadedImages.length - 1));
+            setAxialOffset(newIndex / (loadedImages.length - 1));
             return newIndex;
         });
     };
@@ -178,18 +179,36 @@ function DicomViewer() {
                     )}
                 </div>
             </div>
-            <div style={{ display: 'flex', gap: '20px' }}>
-                <div
-                    ref={viewerRef}
-                    style={{
-                        width: '512px',
-                        height: '512px',
-                        border: '2px solid #666',
-                        background: '#000',
-                        color: 'white'
-                    }}
-                />
-                <WebGLViewer volumeData={volumeData} sliceOffset={sliceOffset} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                    <div
+                        ref={viewerRef}
+                        style={{
+                            width: '512px',
+                            height: '512px',
+                            border: '2px solid #666',
+                            background: '#000',
+                            color: 'white'
+                        }}
+                    />
+                    <WebGLViewer 
+                        volumeData={volumeData} 
+                        sliceOffset={axialOffset} 
+                        viewType={ViewTypes.AXIAL}
+                    />
+                </div>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                    <WebGLViewer 
+                        volumeData={volumeData} 
+                        sliceOffset={sagittalOffset} 
+                        viewType={ViewTypes.SAGITTAL}
+                    />
+                    <WebGLViewer 
+                        volumeData={volumeData} 
+                        sliceOffset={coronalOffset} 
+                        viewType={ViewTypes.CORONAL}
+                    />
+                </div>
             </div>
         </div>
     );

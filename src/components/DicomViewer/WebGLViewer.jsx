@@ -1,9 +1,14 @@
 import { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { mat4 } from 'gl-matrix';
 import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/shaders';
 
-function WebGLViewer({ volumeData, sliceOffset = 0.5 }) {
+export const ViewTypes = {
+    AXIAL: 'axial',
+    SAGITTAL: 'sagittal',
+    CORONAL: 'coronal'
+};
+
+function WebGLViewer({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL }) {
     const canvasRef = useRef(null);
     const glRef = useRef(null);
     const programInfoRef = useRef(null);
@@ -34,10 +39,9 @@ function WebGLViewer({ volumeData, sliceOffset = 0.5 }) {
                 textureCoord: gl.getAttribLocation(program, 'aTextureCoord'),
             },
             uniformLocations: {
-                modelViewMatrix: gl.getUniformLocation(program, 'uModelViewMatrix'),
-                projectionMatrix: gl.getUniformLocation(program, 'uProjectionMatrix'),
-                volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture'),
+                viewType: gl.getUniformLocation(program, 'uViewType'),
                 sliceOffset: gl.getUniformLocation(program, 'uSliceOffset'),
+                volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture')
             },
         };
 
@@ -53,14 +57,14 @@ function WebGLViewer({ volumeData, sliceOffset = 0.5 }) {
             updateVolumeTexture(volumeData);
             drawScene();
         }
-    }, [volumeData, sliceOffset]);
+    }, [volumeData, sliceOffset, viewType]);
 
     const initBuffers = (gl) => {
         const positions = new Float32Array([
-            -1.0,  1.0,  0.0,
-             1.0,  1.0,  0.0,
-            -1.0, -1.0,  0.0,
-             1.0, -1.0,  0.0,
+            -1.0,  1.0,
+             1.0,  1.0,
+            -1.0, -1.0,
+             1.0, -1.0,
         ]);
 
         const texCoords = new Float32Array([
@@ -117,6 +121,17 @@ function WebGLViewer({ volumeData, sliceOffset = 0.5 }) {
         volumeTextureRef.current = texture;
     };
 
+    const getViewTypeValue = () => {
+        switch (viewType) {
+            case ViewTypes.SAGITTAL:
+                return 1;
+            case ViewTypes.CORONAL:
+                return 2;
+            default:
+                return 0; // AXIAL
+        }
+    };
+
     const drawScene = () => {
         const gl = glRef.current;
         const programInfo = programInfoRef.current;
@@ -125,20 +140,13 @@ function WebGLViewer({ volumeData, sliceOffset = 0.5 }) {
         if (!gl || !programInfo || !buffers) return;
 
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-        const projectionMatrix = mat4.create();
-        const modelViewMatrix = mat4.create();
-
-        mat4.perspective(projectionMatrix, 45 * Math.PI / 180, gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 100.0);
-        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -6.0]);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
         gl.useProgram(programInfo.program);
 
         // Set uniforms
-        gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
-        gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
         gl.uniform1f(programInfo.uniformLocations.sliceOffset, sliceOffset);
+        gl.uniform1i(programInfo.uniformLocations.viewType, getViewTypeValue());
 
         // Bind volume texture
         gl.activeTexture(gl.TEXTURE0);
@@ -147,11 +155,25 @@ function WebGLViewer({ volumeData, sliceOffset = 0.5 }) {
 
         // Set vertex attributes
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
-        gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(
+            programInfo.attribLocations.vertexPosition,
+            2,
+            gl.FLOAT,
+            false,
+            0,
+            0
+        );
         gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
-        gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, 2, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(
+            programInfo.attribLocations.textureCoord,
+            2,
+            gl.FLOAT,
+            false,
+            0,
+            0
+        );
         gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, buffers.vertexCount);
@@ -190,7 +212,8 @@ WebGLViewer.propTypes = {
         height: PropTypes.number,
         depth: PropTypes.number
     }),
-    sliceOffset: PropTypes.number
+    sliceOffset: PropTypes.number,
+    viewType: PropTypes.oneOf(Object.values(ViewTypes))
 };
 
 export default WebGLViewer;

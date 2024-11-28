@@ -1,35 +1,45 @@
 export const vertexShaderSource = `#version 300 es
-in vec4 aVertexPosition;
+in vec2 aVertexPosition;
 in vec2 aTextureCoord;
 
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-
-out vec3 vTextureCoord;
-out vec4 vPosition;
+out vec2 vTextureCoord;
 
 void main() {
-    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-    vPosition = aVertexPosition;
-    vTextureCoord = vec3(aTextureCoord.x, aTextureCoord.y, 0.0);
+    gl_Position = vec4(aVertexPosition, 0.0, 1.0);
+    vTextureCoord = aTextureCoord;
 }`;
 
 export const fragmentShaderSource = `#version 300 es
 precision highp float;
 precision highp sampler3D;
 
-in vec3 vTextureCoord;
-in vec4 vPosition;
+in vec2 vTextureCoord;
 
 uniform sampler3D uVolumeTexture;
 uniform float uSliceOffset;
+uniform int uViewType;
 
 out vec4 fragColor;
 
-void main() {
-    vec3 texCoord = vTextureCoord;
-    texCoord.z = uSliceOffset;
+vec3 getViewCoordinate() {
+    vec3 coord;
     
+    if (uViewType == 0) {
+        // Axial view (xy-plane)
+        coord = vec3(vTextureCoord.x, vTextureCoord.y, uSliceOffset);
+    } else if (uViewType == 1) {
+        // Sagittal view (yz-plane)
+        coord = vec3(uSliceOffset, vTextureCoord.x, vTextureCoord.y);
+    } else {
+        // Coronal view (xz-plane)
+        coord = vec3(vTextureCoord.x, uSliceOffset, vTextureCoord.y);
+    }
+    
+    return coord;
+}
+
+void main() {
+    vec3 texCoord = getViewCoordinate();
     float intensity = texture(uVolumeTexture, texCoord).r;
     fragColor = vec4(intensity, intensity, intensity, 1.0);
 }`;
