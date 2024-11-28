@@ -1,5 +1,5 @@
 // src/components/Engine/SliceEngine.jsx
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/sliceShaders';
 
@@ -15,21 +15,41 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     const programInfoRef = useRef(null);
     const bufferInfoRef = useRef(null);
     const volumeTextureRef = useRef(null);
+    const renderRequestRef = useRef(null);
+
+    // WebGL 초기화 및 설정을 메모이제이션
+    const glSetup = useMemo(() => {
+        return {
+            positions: new Float32Array([
+                -1.0,  1.0,
+                 1.0,  1.0,
+                -1.0, -1.0,
+                 1.0, -1.0,
+            ]),
+            texCoords: new Float32Array([
+                0.0, 0.0,
+                1.0, 0.0,
+                0.0, 1.0,
+                1.0, 1.0,
+            ])
+        };
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        const gl = canvas.getContext('webgl2');
+        const gl = canvas.getContext('webgl2', {
+            antialias: false,  // 안티앨리어싱 비활성화로 성능 향상
+            depth: false,      // depth testing 불필요
+            alpha: false       // alpha channel 불필요
+        });
         
         if (!gl) {
             console.error('WebGL2를 초기화할 수 없습니다.');
             return;
         }
 
-        if (!gl.getExtension('EXT_color_buffer_float')) {
-            console.error('EXT_color_buffer_float 확장을 사용할 수 없습니다.');
-            return;
-        }
-
+        gl.getExtension('EXT_color_buffer_float');
+        
         glRef.current = gl;
         const program = initShaderProgram(gl, vertexShaderSource, fragmentShaderSource);
         
@@ -49,6 +69,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         initBuffers(gl);
 
         return () => {
+            cancelAnimationFrame(renderRequestRef.current);
             cleanupWebGL(gl);
         };
     }, []);
@@ -56,24 +77,17 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     useEffect(() => {
         if (volumeData && glRef.current) {
             updateVolumeTexture(volumeData);
-            drawScene();
         }
-    }, [volumeData, sliceOffset, viewType]);
+    }, [volumeData]);
+
+    useEffect(() => {
+        if (glRef.current && programInfoRef.current) {
+            renderRequestRef.current = requestAnimationFrame(drawScene);
+        }
+    }, [sliceOffset, viewType]);
 
     const initBuffers = (gl) => {
-        const positions = new Float32Array([
-            -1.0,  1.0,
-             1.0,  1.0,
-            -1.0, -1.0,
-             1.0, -1.0,
-        ]);
-
-        const texCoords = new Float32Array([
-            0.0, 0.0,
-            1.0, 0.0,
-            0.0, 1.0,
-            1.0, 1.0,
-        ]);
+        const { positions, texCoords } = glSetup;
 
         const positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -100,6 +114,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         const texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_3D, texture);
 
+        // 텍스처 포맷 최적화
         gl.texImage3D(
             gl.TEXTURE_3D,
             0,
@@ -113,8 +128,9 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
             volumeData.data
         );
 
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        // 텍스처 필터링 최적화
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
@@ -124,12 +140,9 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
 
     const getViewTypeValue = () => {
         switch (viewType) {
-            case ViewTypes.SAGITTAL:
-                return 1;
-            case ViewTypes.CORONAL:
-                return 2;
-            default:
-                return 0; // AXIAL
+            case ViewTypes.SAGITTAL: return 1;
+            case ViewTypes.CORONAL: return 2;
+            default: return 0;
         }
     };
 
@@ -140,21 +153,18 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
 
         if (!gl || !programInfo || !buffers) return;
 
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
         gl.useProgram(programInfo.program);
-
-        // Set uniforms
         gl.uniform1f(programInfo.uniformLocations.sliceOffset, sliceOffset);
         gl.uniform1i(programInfo.uniformLocations.viewType, getViewTypeValue());
 
-        // Bind volume texture
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
         gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
 
-        // Set vertex attributes
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
         gl.vertexAttribPointer(
             programInfo.attribLocations.vertexPosition,
