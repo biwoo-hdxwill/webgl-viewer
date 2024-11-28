@@ -1,19 +1,24 @@
 // src/components/DicomViewer/index.jsx
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as cornerstone from 'cornerstone-core';
 import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import dicomParser from 'dicom-parser';
-import WebGLViewer, { ViewTypes } from './WebGLViewer';
+import { useDicom } from '../../context/DicomContext';
 
 function DicomViewer() {
+    const navigate = useNavigate();
+    const { 
+        setVolumeData, 
+        volumeData,
+        loadedImages, 
+        setLoadedImages, 
+        currentImageIndex, 
+        setCurrentImageIndex 
+    } = useDicom();
+    
     const fileInputRef = useRef(null);
     const viewerRef = useRef(null);
-    const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    const [loadedImages, setLoadedImages] = useState([]);
-    const [volumeData, setVolumeData] = useState(null);
-    const [axialOffset, setAxialOffset] = useState(0.5);
-    const [sagittalOffset, setSagittalOffset] = useState(0.5);
-    const [coronalOffset, setCoronalOffset] = useState(0.5);
 
     useEffect(() => {
         const initializeCornerstone = async () => {
@@ -81,7 +86,7 @@ function DicomViewer() {
             file.name.toLowerCase().endsWith('.dcm') || 
             file.type === 'application/dicom'
         );
-    
+
         try {
             const imageIds = await Promise.all(dicomFiles.map(file => {
                 return new Promise((resolve) => {
@@ -89,44 +94,36 @@ function DicomViewer() {
                     resolve(imageId);
                 });
             }));
-    
+
             setLoadedImages(imageIds);
             
             const images = await Promise.all(imageIds.map(id => cornerstone.loadImage(id)));
             const firstImage = images[0];
-    
-            // 이미지 메타데이터에서 윈도우 설정 가져오기
-            const windowCenter = firstImage.windowCenter || 0;
-            const windowWidth = firstImage.windowWidth || 2000;
-    
-            // 볼륨 데이터의 최소/최대값 계산
-            let minValue = Infinity;
-            let maxValue = -Infinity;
             
-            images.forEach(image => {
-                const pixelData = image.getPixelData();
-                for (let i = 0; i < pixelData.length; i++) {
-                    minValue = Math.min(minValue, pixelData[i]);
-                    maxValue = Math.max(maxValue, pixelData[i]);
-                }
-            });
-    
-            // 볼륨 데이터 구성 (윈도우 레벨링 적용)
+            // 윈도우 레벨링 정보 추출
+            const windowCenter = firstImage.windowCenter instanceof Array ? 
+                firstImage.windowCenter[0] : firstImage.windowCenter;
+            const windowWidth = firstImage.windowWidth instanceof Array ? 
+                firstImage.windowWidth[0] : firstImage.windowWidth;
+
+            // 볼륨 데이터 구성
             const volumeBuffer = new Float32Array(firstImage.width * firstImage.height * images.length);
             
             images.forEach((image, i) => {
                 const pixelData = image.getPixelData();
+                const slope = image.slope || 1;
+                const intercept = image.intercept || 0;
                 const offset = i * firstImage.width * firstImage.height;
                 
                 for (let j = 0; j < pixelData.length; j++) {
-                    // 윈도우 레벨링 적용
-                    let hounsfield = pixelData[j];
-                    let normalized = (hounsfield - (windowCenter - windowWidth/2)) / windowWidth;
+                    let hounsfield = pixelData[j] * slope + intercept;
+                    let normalized = (hounsfield - (windowCenter - 0.5)) / (windowWidth - 1.0);
+                    normalized = ((normalized + 0.5) * 255.0) / 255.0;
                     normalized = Math.max(0, Math.min(1, normalized));
                     volumeBuffer[offset + j] = normalized;
                 }
             });
-    
+
             setVolumeData({
                 data: volumeBuffer,
                 width: firstImage.width,
@@ -135,41 +132,32 @@ function DicomViewer() {
                 windowCenter,
                 windowWidth
             });
-    
+
             if (imageIds.length > 0) {
                 setCurrentImageIndex(0);
                 await displayImage(imageIds[0]);
             }
+
         } catch (error) {
             console.error('파일 처리 중 오류:', error);
         }
     };
 
-    const handlePrevImage = () => {
-        setCurrentImageIndex(prev => {
-            const newIndex = prev > 0 ? prev - 1 : loadedImages.length - 1;
-            //etAxialOffset(newIndex / (loadedImages.length - 1));
-            //setSagittalOffset(newIndex / (loadedImages.length - 1));
-            //setCoronalOffset(newIndex / (loadedImages.length - 1));
-            return newIndex;
-        });
+    const handlePrevImage = async () => {
+        if (loadedImages.length === 0) return;
+        
+        const newIndex = currentImageIndex > 0 ? currentImageIndex - 1 : loadedImages.length - 1;
+        setCurrentImageIndex(newIndex);
+        await displayImage(loadedImages[newIndex]);
     };
 
-    const handleNextImage = () => {
-        setCurrentImageIndex(prev => {
-            const newIndex = prev < loadedImages.length - 1 ? prev + 1 : 0;
-            //setAxialOffset(newIndex / (loadedImages.length - 1));
-            //setSagittalOffset(newIndex / (loadedImages.length - 1));
-            //setCoronalOffset(newIndex / (loadedImages.length - 1));
-            return newIndex;
-        });
+    const handleNextImage = async () => {
+        if (loadedImages.length === 0) return;
+        
+        const newIndex = currentImageIndex < loadedImages.length - 1 ? currentImageIndex + 1 : 0;
+        setCurrentImageIndex(newIndex);
+        await displayImage(loadedImages[newIndex]);
     };
-
-    useEffect(() => {
-        if (loadedImages.length > 0) {
-            displayImage(loadedImages[currentImageIndex]);
-        }
-    }, [currentImageIndex, loadedImages]);
 
     return (
         <div className="app" style={{ padding: '20px' }}>
@@ -183,6 +171,22 @@ function DicomViewer() {
                     multiple
                     style={{ marginRight: '10px' }}
                 />
+                {volumeData && (
+                    <button
+                        onClick={() => navigate('/mpr')}
+                        style={{
+                            marginLeft: '10px',
+                            padding: '8px 16px',
+                            backgroundColor: '#4A90E2',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        MPR 뷰어 보기
+                    </button>
+                )}
                 <div style={{ marginTop: '10px' }}>
                     <button 
                         onClick={handlePrevImage}
@@ -204,37 +208,16 @@ function DicomViewer() {
                     )}
                 </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', gap: '20px' }}>
-                    <div
-                        ref={viewerRef}
-                        style={{
-                            width: '512px',
-                            height: '512px',
-                            border: '2px solid #666',
-                            background: '#000',
-                            color: 'white'
-                        }}
-                    />
-                    <WebGLViewer 
-                        volumeData={volumeData} 
-                        sliceOffset={axialOffset} 
-                        viewType={ViewTypes.AXIAL}
-                    />
-                </div>
-                <div style={{ display: 'flex', gap: '20px' }}>
-                    <WebGLViewer 
-                        volumeData={volumeData} 
-                        sliceOffset={sagittalOffset} 
-                        viewType={ViewTypes.SAGITTAL}
-                    />
-                    <WebGLViewer 
-                        volumeData={volumeData} 
-                        sliceOffset={coronalOffset} 
-                        viewType={ViewTypes.CORONAL}
-                    />
-                </div>
-            </div>
+            <div
+                ref={viewerRef}
+                style={{
+                    width: '512px',
+                    height: '512px',
+                    border: '2px solid #666',
+                    background: '#000',
+                    color: 'white'
+                }}
+            />
         </div>
     );
 }
