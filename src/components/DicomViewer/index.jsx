@@ -128,6 +128,8 @@ function DicomViewer() {
         setCurrentImageIndex(prev => {
             const newIndex = prev > 0 ? prev - 1 : loadedImages.length - 1;
             setAxialOffset(newIndex / (loadedImages.length - 1));
+            setSagittalOffset(newIndex / (loadedImages.length - 1));
+            setCoronalOffset(newIndex / (loadedImages.length - 1));
             return newIndex;
         });
     };
@@ -136,6 +138,8 @@ function DicomViewer() {
         setCurrentImageIndex(prev => {
             const newIndex = prev < loadedImages.length - 1 ? prev + 1 : 0;
             setAxialOffset(newIndex / (loadedImages.length - 1));
+            setSagittalOffset(newIndex / (loadedImages.length - 1));
+            setCoronalOffset(newIndex / (loadedImages.length - 1));
             return newIndex;
         });
     };
