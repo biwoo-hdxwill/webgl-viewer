@@ -9,7 +9,8 @@ function DicomViewer() {
     const viewerRef = useRef(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [loadedImages, setLoadedImages] = useState([]);
-    const [currentImageData, setCurrentImageData] = useState(null);
+    const [volumeData, setVolumeData] = useState(null);
+    const [sliceOffset, setSliceOffset] = useState(0.5);
 
     useEffect(() => {
         const initializeCornerstone = async () => {
@@ -56,10 +57,7 @@ function DicomViewer() {
             const element = viewerRef.current;
             if (!element) return;
 
-            console.log('Loading image:', imageId);
             const image = await cornerstone.loadImage(imageId);
-            console.log('Image loaded successfully:', image);
-            
             await cornerstone.displayImage(element, image);
             
             cornerstone.setViewport(element, {
@@ -69,14 +67,6 @@ function DicomViewer() {
                 }
             });
 
-            // DICOM 이미지 데이터 추출 및 WebGL용 데이터 생성
-            const pixelData = image.getPixelData();
-            setCurrentImageData({
-                data: new Float32Array(pixelData),
-                width: image.width,
-                height: image.height,
-            });
-
         } catch (error) {
             console.error('이미지 표시 중 오류:', error);
         }
@@ -84,8 +74,6 @@ function DicomViewer() {
 
     const handleFileSelect = async (e) => {
         const files = Array.from(e.target.files);
-        console.log('Selected files:', files.length);
-
         const dicomFiles = files.filter(file => 
             file.name.toLowerCase().endsWith('.dcm') || 
             file.type === 'application/dicom'
@@ -99,9 +87,33 @@ function DicomViewer() {
                 });
             }));
 
-            console.log('Generated imageIds:', imageIds);
             setLoadedImages(imageIds);
             
+            // 모든 이미지의 픽셀 데이터를 로드
+            const images = await Promise.all(imageIds.map(id => cornerstone.loadImage(id)));
+            const firstImage = images[0];
+
+            // 볼륨 데이터 구성
+            const volumeBuffer = new Float32Array(firstImage.width * firstImage.height * images.length);
+            
+            // 각 슬라이스의 데이터를 볼륨에 복사
+            images.forEach((image, i) => {
+                const pixelData = image.getPixelData();
+                const offset = i * firstImage.width * firstImage.height;
+                
+                // 픽셀 데이터를 Float32Array로 변환하면서 복사
+                for (let j = 0; j < pixelData.length; j++) {
+                    volumeBuffer[offset + j] = pixelData[j] / 255.0; // 정규화
+                }
+            });
+
+            setVolumeData({
+                data: volumeBuffer,
+                width: firstImage.width,
+                height: firstImage.height,
+                depth: images.length
+            });
+
             if (imageIds.length > 0) {
                 setCurrentImageIndex(0);
                 await displayImage(imageIds[0]);
@@ -112,15 +124,19 @@ function DicomViewer() {
     };
 
     const handlePrevImage = () => {
-        setCurrentImageIndex(prev => 
-            prev > 0 ? prev - 1 : loadedImages.length - 1
-        );
+        setCurrentImageIndex(prev => {
+            const newIndex = prev > 0 ? prev - 1 : loadedImages.length - 1;
+            setSliceOffset(newIndex / (loadedImages.length - 1));
+            return newIndex;
+        });
     };
 
     const handleNextImage = () => {
-        setCurrentImageIndex(prev => 
-            prev < loadedImages.length - 1 ? prev + 1 : 0
-        );
+        setCurrentImageIndex(prev => {
+            const newIndex = prev < loadedImages.length - 1 ? prev + 1 : 0;
+            setSliceOffset(newIndex / (loadedImages.length - 1));
+            return newIndex;
+        });
     };
 
     useEffect(() => {
@@ -173,7 +189,7 @@ function DicomViewer() {
                         color: 'white'
                     }}
                 />
-                <WebGLViewer imageData={currentImageData} />
+                <WebGLViewer volumeData={volumeData} sliceOffset={sliceOffset} />
             </div>
         </div>
     );

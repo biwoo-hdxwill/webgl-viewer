@@ -2,25 +2,36 @@ export const vertexShaderSource = `#version 300 es
 in vec4 aVertexPosition;
 in vec2 aTextureCoord;
 
-out vec2 vTextureCoord;
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+
+out vec3 vTextureCoord;
+out vec4 vPosition;
 
 void main() {
-    gl_Position = aVertexPosition;
-    vTextureCoord = aTextureCoord;
+    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+    vPosition = aVertexPosition;
+    vTextureCoord = vec3(aTextureCoord.x, aTextureCoord.y, 0.0);
 }`;
 
 export const fragmentShaderSource = `#version 300 es
 precision highp float;
-precision highp sampler2D;
+precision highp sampler3D;
 
-in vec2 vTextureCoord;
+in vec3 vTextureCoord;
+in vec4 vPosition;
+
+uniform sampler3D uVolumeTexture;
+uniform float uSliceOffset;
+
 out vec4 fragColor;
 
-uniform sampler2D uSampler;
-
 void main() {
-    vec4 texColor = texture(uSampler, vTextureCoord);
-    fragColor = vec4(texColor.rrr, 1.0);
+    vec3 texCoord = vTextureCoord;
+    texCoord.z = uSliceOffset;
+    
+    float intensity = texture(uVolumeTexture, texCoord).r;
+    fragColor = vec4(intensity, intensity, intensity, 1.0);
 }`;
 
 export function initShaderProgram(gl, vsSource, fsSource) {

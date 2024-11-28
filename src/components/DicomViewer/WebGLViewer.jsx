@@ -1,11 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
+import { mat4 } from 'gl-matrix';
 import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/shaders';
 
-function WebGLViewer({ imageData }) {
+function WebGLViewer({ volumeData, sliceOffset = 0.5 }) {
     const canvasRef = useRef(null);
     const glRef = useRef(null);
     const programInfoRef = useRef(null);
     const bufferInfoRef = useRef(null);
+    const volumeTextureRef = useRef(null);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -16,10 +19,14 @@ function WebGLViewer({ imageData }) {
             return;
         }
 
+        if (!gl.getExtension('EXT_color_buffer_float')) {
+            console.error('EXT_color_buffer_float 확장을 사용할 수 없습니다.');
+            return;
+        }
+
         glRef.current = gl;
         const program = initShaderProgram(gl, vertexShaderSource, fragmentShaderSource);
         
-        // 프로그램 정보 저장
         programInfoRef.current = {
             program: program,
             attribLocations: {
@@ -27,77 +34,87 @@ function WebGLViewer({ imageData }) {
                 textureCoord: gl.getAttribLocation(program, 'aTextureCoord'),
             },
             uniformLocations: {
-                sampler: gl.getUniformLocation(program, 'uSampler'),
+                modelViewMatrix: gl.getUniformLocation(program, 'uModelViewMatrix'),
+                projectionMatrix: gl.getUniformLocation(program, 'uProjectionMatrix'),
+                volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture'),
+                sliceOffset: gl.getUniformLocation(program, 'uSliceOffset'),
             },
         };
 
-        // 버퍼 초기화
         initBuffers(gl);
 
         return () => {
-            if (bufferInfoRef.current) {
-                gl.deleteBuffer(bufferInfoRef.current.position);
-                gl.deleteBuffer(bufferInfoRef.current.textureCoord);
-            }
-            if (programInfoRef.current) {
-                gl.deleteProgram(programInfoRef.current.program);
-            }
+            cleanupWebGL(gl);
         };
     }, []);
 
     useEffect(() => {
-        if (imageData && glRef.current && programInfoRef.current) {
-            updateTexture(imageData);
+        if (volumeData && glRef.current) {
+            updateVolumeTexture(volumeData);
             drawScene();
         }
-    }, [imageData]);
+    }, [volumeData, sliceOffset]);
 
     const initBuffers = (gl) => {
-        // 정점 위치 버퍼
         const positions = new Float32Array([
-            -1.0,  1.0,
-             1.0,  1.0,
-            -1.0, -1.0,
-             1.0, -1.0,
+            -1.0,  1.0,  0.0,
+             1.0,  1.0,  0.0,
+            -1.0, -1.0,  0.0,
+             1.0, -1.0,  0.0,
         ]);
-        const positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-        // 텍스처 좌표 버퍼
-        const textureCoordinates = new Float32Array([
+        const texCoords = new Float32Array([
             0.0, 0.0,
             1.0, 0.0,
             0.0, 1.0,
             1.0, 1.0,
         ]);
+
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
         const textureCoordBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, textureCoordinates, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
 
         bufferInfoRef.current = {
             position: positionBuffer,
             textureCoord: textureCoordBuffer,
+            vertexCount: 4,
         };
     };
 
-    const updateTexture = (imageData) => {
+    const updateVolumeTexture = (volumeData) => {
         const gl = glRef.current;
-        
-        // 텍스처 생성 및 바인딩
+
+        if (volumeTextureRef.current) {
+            gl.deleteTexture(volumeTextureRef.current);
+        }
+
         const texture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.bindTexture(gl.TEXTURE_3D, texture);
 
-        // 텍스처 데이터 설정
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, 
-            imageData.width, imageData.height, 0, 
-            gl.RED, gl.FLOAT, imageData.data);
+        gl.texImage3D(
+            gl.TEXTURE_3D,
+            0,
+            gl.R16F,
+            volumeData.width,
+            volumeData.height,
+            volumeData.depth,
+            0,
+            gl.RED,
+            gl.FLOAT,
+            volumeData.data
+        );
 
-        // 텍스처 파라미터 설정
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+
+        volumeTextureRef.current = texture;
     };
 
     const drawScene = () => {
@@ -105,40 +122,52 @@ function WebGLViewer({ imageData }) {
         const programInfo = programInfoRef.current;
         const buffers = bufferInfoRef.current;
 
+        if (!gl || !programInfo || !buffers) return;
+
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        const projectionMatrix = mat4.create();
+        const modelViewMatrix = mat4.create();
+
+        mat4.perspective(projectionMatrix, 45 * Math.PI / 180, gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 100.0);
+        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -6.0]);
 
         gl.useProgram(programInfo.program);
 
-        // 버텍스 위치 설정
-        {
-            const numComponents = 2;
-            const type = gl.FLOAT;
-            const normalize = false;
-            const stride = 0;
-            const offset = 0;
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
-            gl.vertexAttribPointer(
-                programInfo.attribLocations.vertexPosition,
-                numComponents, type, normalize, stride, offset);
-            gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
-        }
+        // Set uniforms
+        gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+        gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+        gl.uniform1f(programInfo.uniformLocations.sliceOffset, sliceOffset);
 
-        // 텍스처 좌표 설정
-        {
-            const numComponents = 2;
-            const type = gl.FLOAT;
-            const normalize = false;
-            const stride = 0;
-            const offset = 0;
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
-            gl.vertexAttribPointer(
-                programInfo.attribLocations.textureCoord,
-                numComponents, type, normalize, stride, offset);
-            gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
-        }
+        // Bind volume texture
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
+        gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
 
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        // Set vertex attributes
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+        gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
+        gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, buffers.vertexCount);
+    };
+
+    const cleanupWebGL = (gl) => {
+        if (bufferInfoRef.current) {
+            gl.deleteBuffer(bufferInfoRef.current.position);
+            gl.deleteBuffer(bufferInfoRef.current.textureCoord);
+        }
+        if (volumeTextureRef.current) {
+            gl.deleteTexture(volumeTextureRef.current);
+        }
+        if (programInfoRef.current) {
+            gl.deleteProgram(programInfoRef.current.program);
+        }
     };
 
     return (
@@ -153,5 +182,15 @@ function WebGLViewer({ imageData }) {
         />
     );
 }
+
+WebGLViewer.propTypes = {
+    volumeData: PropTypes.shape({
+        data: PropTypes.instanceOf(Float32Array),
+        width: PropTypes.number,
+        height: PropTypes.number,
+        depth: PropTypes.number
+    }),
+    sliceOffset: PropTypes.number
+};
 
 export default WebGLViewer;
