@@ -1,3 +1,4 @@
+// src/utils/shaders.js
 export const vertexShaderSource = `#version 300 es
 in vec2 aVertexPosition;
 in vec2 aTextureCoord;

@@ -1,3 +1,4 @@
+// src/components/DicomViewer/WebGLViewer.jsx
 import { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/shaders';
