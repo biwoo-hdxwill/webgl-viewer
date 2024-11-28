@@ -27,11 +27,11 @@ vec4 transferFunction(float intensity) {
 }
 
 void main() {
-    // 레이 시작점과 종료점 계산
-    vec3 rayStart = vec3(texcoord, 0.0);
-    vec3 rayEnd = vec3(texcoord, 1.0);
+    vec3 rayStart = vec3(1.0 - texcoord.x, 1.0 - texcoord.y, 1.0 - texcoord.y);
+    vec3 rayEnd = vec3(1.0 - texcoord.x, 1.0 - texcoord.y, 0.0 - texcoord.y);
+
     vec3 rayDir = normalize(rayEnd - rayStart);
-    
+
     vec4 accumulatedColor = vec4(0.0);
     float stepSize = uStepSize;
     vec3 currentPosition = rayStart;
