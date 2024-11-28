@@ -1,23 +1,19 @@
 // src/utils/volumeShaders.js
 export const volumeVertexShaderSource = `#version 300 es
-in vec3 aVertexPosition;
-
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-
-out vec3 vPosition;
+in vec2 aVertexPosition;
+out vec2 texcoord;
 
 void main() {
-    vPosition = aVertexPosition;
-    gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aVertexPosition, 1.0);
+    gl_Position = vec4(aVertexPosition, 0.0, 1.0);
+    texcoord = (aVertexPosition + 1.0) * 0.5;
 }`;
 
 export const volumeFragmentShaderSource = `#version 300 es
 precision highp float;
 precision highp sampler3D;
+precision highp sampler2D;
 
-in vec3 vPosition;
-
+in vec2 texcoord;
 uniform sampler3D uVolumeTexture;
 uniform float uStepSize;
 uniform float uThreshold;
@@ -25,47 +21,39 @@ uniform float uThreshold;
 out vec4 fragColor;
 
 vec4 transferFunction(float intensity) {
-    // 본/조직에 대한 더 나은 시각화를 위한 전달 함수 수정
-    vec3 color;
-    float alpha;
-    
-    if (intensity < 0.1) {
-        alpha = 0.0;
-    } else if (intensity < 0.3) {
-        alpha = smoothstep(0.1, 0.3, intensity) * 0.4;
-        color = vec3(0.5);  // 연조직
-    } else {
-        alpha = smoothstep(0.3, 1.0, intensity) * 0.8;
-        color = vec3(1.0);  // 뼈
-    }
-    
+    vec3 color = vec3(intensity);
+    float alpha = intensity > uThreshold ? intensity : 0.0;
     return vec4(color, alpha);
 }
 
 void main() {
-    // 레이 방향 계산 개선
-    vec3 rayDir = normalize(vPosition);
-    vec3 rayPos = (vPosition + 1.0) * 0.5;  // [-1,1] 범위를 [0,1]로 변환
-    float stepSize = uStepSize;
-    vec4 accumulatedColor = vec4(0.0);
+    // 레이 시작점과 종료점 계산
+    vec3 rayStart = vec3(texcoord, 0.0);
+    vec3 rayEnd = vec3(texcoord, 1.0);
+    vec3 rayDir = normalize(rayEnd - rayStart);
     
-    // 더 정확한 레이마칭
-    for(int i = 0; i < 512; i++) {  // 최대 반복 횟수 제한
-        vec3 samplePos = rayPos + rayDir * float(i) * stepSize;
-        
-        // 볼륨 경계 체크
-        if(any(lessThan(samplePos, vec3(0.0))) || any(greaterThan(samplePos, vec3(1.0)))) {
+    vec4 accumulatedColor = vec4(0.0);
+    float stepSize = uStepSize;
+    vec3 currentPosition = rayStart;
+    
+    // 레이마칭
+    for(int i = 0; i < 512; i++) {
+        if(currentPosition.x < 0.0 || currentPosition.x > 1.0 ||
+           currentPosition.y < 0.0 || currentPosition.y > 1.0 ||
+           currentPosition.z < 0.0 || currentPosition.z > 1.0) {
             break;
         }
         
-        float intensity = texture(uVolumeTexture, samplePos).r;
+        float intensity = texture(uVolumeTexture, currentPosition).r;
         vec4 sampledColor = transferFunction(intensity);
         
-        // 전-후방 합성
+        // 전방-후방 합성
         accumulatedColor.rgb += (1.0 - accumulatedColor.a) * sampledColor.a * sampledColor.rgb;
         accumulatedColor.a += (1.0 - accumulatedColor.a) * sampledColor.a;
         
         if(accumulatedColor.a >= 0.95) break;
+        
+        currentPosition += rayDir * stepSize;
     }
     
     fragColor = accumulatedColor;
