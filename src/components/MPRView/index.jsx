@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDicom } from '../../context/DicomContext';
 import SliceEngine, { ViewTypes } from '../Engine/SliceEngine';
-//import VolumeEngine from '../Engine/VolumeEngine';
+import VolumeEngine from '../Engine/VolumeEngine';
 
 function MPRView() {
     const navigate = useNavigate();
@@ -108,14 +108,14 @@ function MPRView() {
                             style={{ width: '100%', marginTop: '10px' }}
                         />
                     </div>
-                    {/* <div>
+                    <div>
                         <h3 style={{ marginBottom: '10px' }}>3D Volume View</h3>
                         <VolumeEngine 
                             volumeData={volumeData} 
                             rotationX={0} 
                             rotationY={0}
                         />
-                    </div> */}
+                    </div>
                 </div>
             </div>
         </div>

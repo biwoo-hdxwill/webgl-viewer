@@ -1,7 +1,7 @@
 // src/components/Engine/VolumeEngine.jsx
 import { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/volumeShader';
+import { volumeVertexShaderSource, volumeFragmentShaderSource, initVolumeShaderProgram } from '../../utils/volumeShader';
 import { mat4 } from 'gl-matrix';
 
 function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
@@ -10,24 +10,33 @@ function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
     const programInfoRef = useRef(null);
     const bufferInfoRef = useRef(null);
     const volumeTextureRef = useRef(null);
+    const animationFrameRef = useRef(null);
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        const gl = canvas.getContext('webgl2');
+        const gl = canvas.getContext('webgl2', {
+            antialias: false,
+            depth: true,
+            alpha: false
+        });
         
         if (!gl) {
             console.error('WebGL2를 초기화할 수 없습니다.');
             return;
         }
 
+        if (!gl.getExtension('EXT_color_buffer_float')) {
+            console.error('EXT_color_buffer_float 확장을 사용할 수 없습니다.');
+            return;
+        }
+
         glRef.current = gl;
-        const program = initShaderProgram(gl, vertexShaderSource, fragmentShaderSource);
+        const program = initVolumeShaderProgram(gl, volumeVertexShaderSource, volumeFragmentShaderSource);
         
         programInfoRef.current = {
             program: program,
             attribLocations: {
                 vertexPosition: gl.getAttribLocation(program, 'aVertexPosition'),
-                textureCoord: gl.getAttribLocation(program, 'aTextureCoord'),
             },
             uniformLocations: {
                 modelViewMatrix: gl.getUniformLocation(program, 'uModelViewMatrix'),
@@ -40,19 +49,12 @@ function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
         initBuffers(gl);
 
         return () => {
+            cancelAnimationFrame(animationFrameRef.current);
             cleanupWebGL(gl);
         };
     }, []);
 
-    useEffect(() => {
-        if (volumeData && glRef.current) {
-            updateVolumeTexture(volumeData);
-            drawScene();
-        }
-    }, [volumeData, rotationX, rotationY]);
-
     const initBuffers = (gl) => {
-        // Create a cube
         const positions = new Float32Array([
             // Front face
             -1.0, -1.0,  1.0,
@@ -64,15 +66,35 @@ function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
             -1.0,  1.0, -1.0,
              1.0,  1.0, -1.0,
              1.0, -1.0, -1.0,
+            // Top face
+            -1.0,  1.0, -1.0,
+            -1.0,  1.0,  1.0,
+             1.0,  1.0,  1.0,
+             1.0,  1.0, -1.0,
+            // Bottom face
+            -1.0, -1.0, -1.0,
+             1.0, -1.0, -1.0,
+             1.0, -1.0,  1.0,
+            -1.0, -1.0,  1.0,
+            // Right face
+             1.0, -1.0, -1.0,
+             1.0,  1.0, -1.0,
+             1.0,  1.0,  1.0,
+             1.0, -1.0,  1.0,
+            // Left face
+            -1.0, -1.0, -1.0,
+            -1.0, -1.0,  1.0,
+            -1.0,  1.0,  1.0,
+            -1.0,  1.0, -1.0,
         ]);
 
         const indices = new Uint16Array([
-            0, 1, 2,    0, 2, 3,  // front
-            4, 5, 6,    4, 6, 7,  // back
-            0, 4, 7,    0, 7, 1,  // bottom
-            3, 2, 6,    3, 6, 5,  // top
-            0, 3, 5,    0, 5, 4,  // left
-            1, 7, 6,    1, 6, 2,  // right
+            0,  1,  2,    0,  2,  3,    // front
+            4,  5,  6,    4,  6,  7,    // back
+            8,  9,  10,   8,  10, 11,   // top
+            12, 13, 14,   12, 14, 15,   // bottom
+            16, 17, 18,   16, 18, 19,   // right
+            20, 21, 22,   20, 22, 23,   // left
         ]);
 
         const positionBuffer = gl.createBuffer();
@@ -127,30 +149,25 @@ function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
         const programInfo = programInfoRef.current;
         const buffers = bufferInfoRef.current;
 
-        if (!gl || !programInfo || !buffers) return;
+        if (!gl || !programInfo || !buffers || !volumeTextureRef.current) return;
 
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clearDepth(1.0);
-        gl.enable(gl.DEPTH_TEST);
-        gl.depthFunc(gl.LEQUAL);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        // Set up perspective matrix
-        const fieldOfView = (45 * Math.PI) / 180;
-        const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-        const zNear = 0.1;
-        const zFar = 100.0;
-        const projectionMatrix = mat4.create();
-        mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
-
-        // Set up model view matrix
         const modelViewMatrix = mat4.create();
-        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -6.0]);
+        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -4.0]);
         mat4.rotate(modelViewMatrix, modelViewMatrix, rotationX, [1, 0, 0]);
         mat4.rotate(modelViewMatrix, modelViewMatrix, rotationY, [0, 1, 0]);
 
         gl.useProgram(programInfo.program);
-        gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+
+        gl.uniformMatrix4fv(
+            programInfo.uniformLocations.modelViewMatrix,
+            false,
+            modelViewMatrix
+        );
+
         gl.uniform1f(programInfo.uniformLocations.stepSize, 0.01);
         gl.uniform1f(programInfo.uniformLocations.threshold, 0.15);
 
@@ -169,9 +186,26 @@ function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
         gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
 
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
         gl.drawElements(gl.TRIANGLES, buffers.vertexCount, gl.UNSIGNED_SHORT, 0);
+
+        gl.disable(gl.BLEND);
     };
+
+    useEffect(() => {
+        if (volumeData && glRef.current) {
+            updateVolumeTexture(volumeData);
+        }
+    }, [volumeData]);
+
+    useEffect(() => {
+        if (glRef.current && programInfoRef.current) {
+            drawScene();
+        }
+    }, [rotationX, rotationY]);
 
     const cleanupWebGL = (gl) => {
         if (bufferInfoRef.current) {

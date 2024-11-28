@@ -1,5 +1,5 @@
 // src/utils/volumeShaders.js
-export const vertexShaderSource = `#version 300 es
+export const volumeVertexShaderSource = `#version 300 es
 in vec3 aVertexPosition;
 
 uniform mat4 uModelViewMatrix;
@@ -11,7 +11,7 @@ void main() {
     gl_Position = uModelViewMatrix * vec4(aVertexPosition, 1.0);
 }`;
 
-export const fragmentShaderSource = `#version 300 es
+export const volumeFragmentShaderSource = `#version 300 es
 precision highp float;
 precision highp sampler3D;
 
@@ -63,7 +63,7 @@ void main() {
     fragColor = accumulatedColor;
 }`;
 
-export function initShaderProgram(gl, vsSource, fsSource) {
+export function initVolumeShaderProgram(gl, vsSource, fsSource) {
     const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
     const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
 

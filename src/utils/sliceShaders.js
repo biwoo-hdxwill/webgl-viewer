@@ -1,5 +1,5 @@
 // src/utils/sliceShaders.js
-export const vertexShaderSource = `#version 300 es
+export const sliceVertexShaderSource = `#version 300 es
 in vec2 aVertexPosition;
 in vec2 aTextureCoord;
 
@@ -10,7 +10,7 @@ void main() {
     vTextureCoord = aTextureCoord;
 }`;
 
-export const fragmentShaderSource = `#version 300 es
+export const sliceFragmentShaderSource = `#version 300 es
 precision highp float;
 precision highp sampler3D;
 
@@ -53,7 +53,7 @@ void main() {
     fragColor = vec4(intensity, intensity, intensity, 1.0);
 }`;
 
-export function initShaderProgram(gl, vsSource, fsSource) {
+export function initSliceShaderProgram(gl, vsSource, fsSource) {
     const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
     const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
 

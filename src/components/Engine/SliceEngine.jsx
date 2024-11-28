@@ -1,7 +1,7 @@
 // src/components/Engine/SliceEngine.jsx
 import { useEffect, useRef, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/sliceShaders';
+import { sliceVertexShaderSource, sliceFragmentShaderSource, initSliceShaderProgram } from '../../utils/sliceShaders';
 
 export const ViewTypes = {
     AXIAL: 'axial',
@@ -51,7 +51,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         gl.getExtension('EXT_color_buffer_float');
         
         glRef.current = gl;
-        const program = initShaderProgram(gl, vertexShaderSource, fragmentShaderSource);
+        const program = initSliceShaderProgram(gl, sliceVertexShaderSource, sliceFragmentShaderSource);
         
         programInfoRef.current = {
             program: program,
