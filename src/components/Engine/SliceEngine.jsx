@@ -9,7 +9,7 @@ export const ViewTypes = {
     CORONAL: 'coronal'
 };
 
-function SilceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL }) {
+function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL }) {
     const canvasRef = useRef(null);
     const glRef = useRef(null);
     const programInfoRef = useRef(null);
@@ -206,7 +206,7 @@ function SilceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     );
 }
 
-SilceEngine.propTypes = {
+SliceEngine.propTypes = {
     volumeData: PropTypes.shape({
         data: PropTypes.instanceOf(Float32Array),
         width: PropTypes.number,
@@ -217,4 +217,4 @@ SilceEngine.propTypes = {
     viewType: PropTypes.oneOf(Object.values(ViewTypes))
 };
 
-export default SilceEngine;
+export default SliceEngine;
