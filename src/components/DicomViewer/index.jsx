@@ -81,7 +81,7 @@ function DicomViewer() {
             file.name.toLowerCase().endsWith('.dcm') || 
             file.type === 'application/dicom'
         );
-
+    
         try {
             const imageIds = await Promise.all(dicomFiles.map(file => {
                 return new Promise((resolve) => {
@@ -89,33 +89,53 @@ function DicomViewer() {
                     resolve(imageId);
                 });
             }));
-
+    
             setLoadedImages(imageIds);
             
-            // 모든 이미지의 픽셀 데이터를 로드
             const images = await Promise.all(imageIds.map(id => cornerstone.loadImage(id)));
             const firstImage = images[0];
-
-            // 볼륨 데이터 구성
+    
+            // 이미지 메타데이터에서 윈도우 설정 가져오기
+            const windowCenter = firstImage.windowCenter || 0;
+            const windowWidth = firstImage.windowWidth || 2000;
+    
+            // 볼륨 데이터의 최소/최대값 계산
+            let minValue = Infinity;
+            let maxValue = -Infinity;
+            
+            images.forEach(image => {
+                const pixelData = image.getPixelData();
+                for (let i = 0; i < pixelData.length; i++) {
+                    minValue = Math.min(minValue, pixelData[i]);
+                    maxValue = Math.max(maxValue, pixelData[i]);
+                }
+            });
+    
+            // 볼륨 데이터 구성 (윈도우 레벨링 적용)
             const volumeBuffer = new Float32Array(firstImage.width * firstImage.height * images.length);
             
-            // 각 슬라이스의 데이터를 볼륨에 복사
             images.forEach((image, i) => {
                 const pixelData = image.getPixelData();
                 const offset = i * firstImage.width * firstImage.height;
                 
                 for (let j = 0; j < pixelData.length; j++) {
-                    volumeBuffer[offset + j] = pixelData[j] / 255.0; // 정규화
+                    // 윈도우 레벨링 적용
+                    let hounsfield = pixelData[j];
+                    let normalized = (hounsfield - (windowCenter - windowWidth/2)) / windowWidth;
+                    normalized = Math.max(0, Math.min(1, normalized));
+                    volumeBuffer[offset + j] = normalized;
                 }
             });
-
+    
             setVolumeData({
                 data: volumeBuffer,
                 width: firstImage.width,
                 height: firstImage.height,
-                depth: images.length
+                depth: images.length,
+                windowCenter,
+                windowWidth
             });
-
+    
             if (imageIds.length > 0) {
                 setCurrentImageIndex(0);
                 await displayImage(imageIds[0]);

@@ -26,22 +26,28 @@ vec3 getViewCoordinate() {
     vec3 coord;
     
     if (uViewType == 0) {
-        // Axial view (xy-plane)
         coord = vec3(vTextureCoord.x, vTextureCoord.y, uSliceOffset);
     } else if (uViewType == 1) {
-        // Sagittal view (yz-plane)
         coord = vec3(uSliceOffset, vTextureCoord.x, vTextureCoord.y);
     } else {
-        // Coronal view (xz-plane)
         coord = vec3(vTextureCoord.x, uSliceOffset, vTextureCoord.y);
     }
     
     return coord;
 }
 
+// 감마 보정 함수 추가
+float gammaCorrect(float value) {
+    return pow(value, 1.0/2.2);
+}
+
 void main() {
     vec3 texCoord = getViewCoordinate();
     float intensity = texture(uVolumeTexture, texCoord).r;
+    
+    // 감마 보정 적용
+    intensity = gammaCorrect(intensity);
+    
     fragColor = vec4(intensity, intensity, intensity, 1.0);
 }`;
 
