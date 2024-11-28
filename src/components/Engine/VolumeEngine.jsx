@@ -56,60 +56,21 @@ function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
     }, []);
 
     const initBuffers = (gl) => {
+        // 화면을 채우는 쿼드 생성
         const positions = new Float32Array([
-            // Front face
-            -1.0, -1.0,  1.0,
-             1.0, -1.0,  1.0,
-             1.0,  1.0,  1.0,
-            -1.0,  1.0,  1.0,
-            // Back face
-            -1.0, -1.0, -1.0,
-            -1.0,  1.0, -1.0,
-             1.0,  1.0, -1.0,
-             1.0, -1.0, -1.0,
-            // Top face
-            -1.0,  1.0, -1.0,
-            -1.0,  1.0,  1.0,
-             1.0,  1.0,  1.0,
-             1.0,  1.0, -1.0,
-            // Bottom face
-            -1.0, -1.0, -1.0,
-             1.0, -1.0, -1.0,
-             1.0, -1.0,  1.0,
-            -1.0, -1.0,  1.0,
-            // Right face
-             1.0, -1.0, -1.0,
-             1.0,  1.0, -1.0,
-             1.0,  1.0,  1.0,
-             1.0, -1.0,  1.0,
-            // Left face
-            -1.0, -1.0, -1.0,
-            -1.0, -1.0,  1.0,
-            -1.0,  1.0,  1.0,
-            -1.0,  1.0, -1.0,
-        ]);
-
-        const indices = new Uint16Array([
-            0,  1,  2,    0,  2,  3,    // front
-            4,  5,  6,    4,  6,  7,    // back
-            8,  9,  10,   8,  10, 11,   // top
-            12, 13, 14,   12, 14, 15,   // bottom
-            16, 17, 18,   16, 18, 19,   // right
-            20, 21, 22,   20, 22, 23,   // left
+            -1.0, -1.0,
+             1.0, -1.0,
+            -1.0,  1.0,
+             1.0,  1.0,
         ]);
 
         const positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-        const indexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-
         bufferInfoRef.current = {
             position: positionBuffer,
-            indices: indexBuffer,
-            vertexCount: 36,
+            vertexCount: 4,
         };
     };
 
@@ -149,82 +110,44 @@ function VolumeEngine({ volumeData, rotationX = 0, rotationY = 0 }) {
         const gl = glRef.current;
         const programInfo = programInfoRef.current;
         const buffers = bufferInfoRef.current;
-    
+
         if (!gl || !programInfo || !buffers || !volumeTextureRef.current) return;
-    
+
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    
-        // 투영 행렬 설정
-        const fieldOfView = (45 * Math.PI) / 180;
-        const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-        const projectionMatrix = mat4.create();
-        mat4.perspective(projectionMatrix, fieldOfView, aspect, 0.1, 100.0);
-    
-        // 모델뷰 행렬 설정
-        const modelViewMatrix = mat4.create();
-        mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -4.0]);
-        
-        // 초기 회전 적용
-        mat4.rotate(modelViewMatrix, modelViewMatrix, Math.PI / 4, [1, 0, 0]);
-        mat4.rotate(modelViewMatrix, modelViewMatrix, Math.PI / 4, [0, 1, 0]);
-        
-        // 사용자 회전 적용
-        mat4.rotate(modelViewMatrix, modelViewMatrix, rotationX, [1, 0, 0]);
-        mat4.rotate(modelViewMatrix, modelViewMatrix, rotationY, [0, 1, 0]);
-    
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
         gl.useProgram(programInfo.program);
-    
-        // 행렬 uniform 설정
-        gl.uniformMatrix4fv(
-            programInfo.uniformLocations.projectionMatrix,
-            false,
-            projectionMatrix
-        );
-    
-        gl.uniformMatrix4fv(
-            programInfo.uniformLocations.modelViewMatrix,
-            false,
-            modelViewMatrix
-        );
-    
+
+        // 볼륨 텍스처 설정
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
+        gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
+
         // 레이마칭 파라미터 설정
-        gl.uniform1f(programInfo.uniformLocations.stepSize, 0.005);  // 더 정밀한 샘플링
-        gl.uniform1f(programInfo.uniformLocations.threshold, 0.1);   // 낮은 임계값으로 더 많은 디테일 표시
-    
-        // 버텍스 버퍼 설정
+        gl.uniform1f(programInfo.uniformLocations.stepSize, 0.005);
+        gl.uniform1f(programInfo.uniformLocations.threshold, 0.1);
+
+        // 버텍스 데이터 설정
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
         gl.vertexAttribPointer(
             programInfo.attribLocations.vertexPosition,
-            3,
+            2,
             gl.FLOAT,
             false,
             0,
             0
         );
         gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
-    
-        // 볼륨 텍스처 설정
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
-        gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
-    
+
         // 블렌딩 설정
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        
-        // 깊이 테스트 설정
-        gl.enable(gl.DEPTH_TEST);
-        gl.depthFunc(gl.LEQUAL);
-    
-        // 큐브 그리기
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
-        gl.drawElements(gl.TRIANGLES, buffers.vertexCount, gl.UNSIGNED_SHORT, 0);
-    
-        // 상태 복원
+
+        // 렌더링
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, buffers.vertexCount);
+
         gl.disable(gl.BLEND);
-        gl.disable(gl.DEPTH_TEST);
     };
 
     useEffect(() => {
