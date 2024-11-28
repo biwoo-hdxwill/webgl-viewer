@@ -45,6 +45,8 @@ void main() {
     vec3 texCoord = getViewCoordinate();
     float intensity = texture(uVolumeTexture, texCoord).r;
     
+    // 밝기 조절
+    intensity = intensity * 0.3;
     // 감마 보정 적용
     intensity = gammaCorrect(intensity);
     
