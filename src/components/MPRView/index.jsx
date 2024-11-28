@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDicom } from '../../context/DicomContext';
-import WebGLViewer, { ViewTypes } from '../DicomViewer/WebGLViewer';
+import SilceEngine, { ViewTypes } from '../Engine/SliceEngine';
 
 function MPRView() {
     const navigate = useNavigate();
@@ -56,7 +56,7 @@ function MPRView() {
                 <div style={{ display: 'flex', gap: '20px' }}>
                     <div>
                         <h3 style={{ marginBottom: '10px' }}>Axial View</h3>
-                        <WebGLViewer 
+                        <SilceEngine 
                             volumeData={volumeData} 
                             sliceOffset={axialOffset} 
                             viewType={ViewTypes.AXIAL}
@@ -73,7 +73,7 @@ function MPRView() {
                     </div>
                     <div>
                         <h3 style={{ marginBottom: '10px' }}>Sagittal View</h3>
-                        <WebGLViewer 
+                        <SilceEngine 
                             volumeData={volumeData} 
                             sliceOffset={sagittalOffset} 
                             viewType={ViewTypes.SAGITTAL}
@@ -92,7 +92,7 @@ function MPRView() {
                 <div style={{ display: 'flex', gap: '20px' }}>
                     <div>
                         <h3 style={{ marginBottom: '10px' }}>Coronal View</h3>
-                        <WebGLViewer 
+                        <SilceEngine 
                             volumeData={volumeData} 
                             sliceOffset={coronalOffset} 
                             viewType={ViewTypes.CORONAL}

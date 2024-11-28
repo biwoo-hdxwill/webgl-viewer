@@ -1,7 +1,7 @@
-// src/components/DicomViewer/WebGLViewer.jsx
+// src/components/Engine/SliceEngine.jsx
 import { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/shaders';
+import { vertexShaderSource, fragmentShaderSource, initShaderProgram } from '../../utils/sliceShaders';
 
 export const ViewTypes = {
     AXIAL: 'axial',
@@ -9,7 +9,7 @@ export const ViewTypes = {
     CORONAL: 'coronal'
 };
 
-function WebGLViewer({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL }) {
+function SilceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL }) {
     const canvasRef = useRef(null);
     const glRef = useRef(null);
     const programInfoRef = useRef(null);
@@ -206,7 +206,7 @@ function WebGLViewer({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     );
 }
 
-WebGLViewer.propTypes = {
+SilceEngine.propTypes = {
     volumeData: PropTypes.shape({
         data: PropTypes.instanceOf(Float32Array),
         width: PropTypes.number,
@@ -217,4 +217,4 @@ WebGLViewer.propTypes = {
     viewType: PropTypes.oneOf(Object.values(ViewTypes))
 };
 
-export default WebGLViewer;
+export default SilceEngine;

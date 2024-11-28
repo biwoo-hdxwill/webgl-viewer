@@ -1,4 +1,4 @@
-// src/components/DicomViewer/index.jsx
+// src/components/DicomView/index.jsx
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as cornerstone from 'cornerstone-core';
@@ -6,7 +6,7 @@ import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import dicomParser from 'dicom-parser';
 import { useDicom } from '../../context/DicomContext';
 
-function DicomViewer() {
+function DicomView() {
     const navigate = useNavigate();
     const { 
         setVolumeData, 
@@ -222,4 +222,4 @@ function DicomViewer() {
     );
 }
 
-export default DicomViewer;
+export default DicomView;
