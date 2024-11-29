@@ -1,4 +1,4 @@
-// src/utils/volumeShaders.js
+// src/utils/volumeShader.js
 export const volumeVertexShaderSource = `#version 300 es
 in vec2 aVertexPosition;
 out vec2 texcoord;
@@ -11,12 +11,12 @@ void main() {
 export const volumeFragmentShaderSource = `#version 300 es
 precision highp float;
 precision highp sampler3D;
-precision highp sampler2D;
 
 in vec2 texcoord;
 uniform sampler3D uVolumeTexture;
 uniform float uStepSize;
 uniform float uThreshold;
+uniform mat4 uRotationMatrix;
 
 out vec4 fragColor;
 
@@ -27,16 +27,15 @@ vec4 transferFunction(float intensity) {
 }
 
 void main() {
-    vec3 rayStart = vec3(1.0 - texcoord.x, 1.0 - texcoord.y, 1.0 - texcoord.y);
-    vec3 rayEnd = vec3(1.0 - texcoord.x, 1.0 - texcoord.y, 0.0 - texcoord.y);
-
-    vec3 rayDir = normalize(rayEnd - rayStart);
+    vec3 rayStart = vec3(texcoord.x, texcoord.y, 0.0);
+    rayStart = (uRotationMatrix * vec4(rayStart, 1.0)).xyz;
+    rayStart = rayStart * 0.5 + 0.5;  // [-1,1] -> [0,1] 변환
 
     vec4 accumulatedColor = vec4(0.0);
-    float stepSize = uStepSize;
     vec3 currentPosition = rayStart;
-    
-    // 레이마칭
+    vec3 rayDirection = vec3(0.0, 0.0, 1.0);
+    rayDirection = normalize((uRotationMatrix * vec4(rayDirection, 0.0)).xyz);
+
     for(int i = 0; i < 512; i++) {
         if(currentPosition.x < 0.0 || currentPosition.x > 1.0 ||
            currentPosition.y < 0.0 || currentPosition.y > 1.0 ||
@@ -47,13 +46,12 @@ void main() {
         float intensity = texture(uVolumeTexture, currentPosition).r;
         vec4 sampledColor = transferFunction(intensity);
         
-        // 전방-후방 합성
         accumulatedColor.rgb += (1.0 - accumulatedColor.a) * sampledColor.a * sampledColor.rgb;
         accumulatedColor.a += (1.0 - accumulatedColor.a) * sampledColor.a;
         
         if(accumulatedColor.a >= 0.95) break;
         
-        currentPosition += rayDir * stepSize;
+        currentPosition += rayDirection * uStepSize;
     }
     
     fragColor = accumulatedColor;
