@@ -26,7 +26,6 @@ vec3 transformPoint(vec3 p) {
 }
 
 vec4 transferFunction(float intensity) {
-    // 강도값에 따른 색상 매핑 개선
     vec3 color;
     float alpha;
     
@@ -37,20 +36,23 @@ vec4 transferFunction(float intensity) {
         // 뼈와 같은 고밀도 영역은 밝게, 연조직은 어둡게 표현
         float normalizedIntensity = (intensity - uThreshold) / (1.0 - uThreshold);
         
-        // 비선형 매핑으로 대비 향상
-        float contrast = pow(normalizedIntensity, 1.5);
+        // 비선형 매핑
+        float contrast = pow(normalizedIntensity, 2.0);
         
-        // 그레이스케일 값 설정
-        color = vec3(contrast);
+        // 뼈 색깔 더 밝게
+        color = vec3(contrast * 5.0);  // 전체적인 밝기 20% 증가
         
-        // 밀도에 따른 투명도 조절
-        alpha = normalizedIntensity * 0.15; // 투명도 계수 낮춤
+        // 투명도
+        alpha = normalizedIntensity * 0.25;  // 0.15에서 0.25로 증가
         
-        // 높은 밀도 영역의 투명도 강화
-        if (intensity > 0.75) {
-            alpha *= 2.0;
+        // 고밀도 영역의 투명도와 대비 강화
+        if (intensity > 0.6) {  // 고밀도 기준 임계값
+            alpha *= 2.5;
+            color *= 1.3;
         }
     }
+    
+    color = clamp(color, 0.0, 1.0);
     
     return vec4(color, alpha);
 }
@@ -94,8 +96,7 @@ void main() {
     }
     
     fragColor = accumulatedColor;
-}
-    `;
+}`;
 
 export function initVolumeShaderProgram(gl, vsSource, fsSource) {
     const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
