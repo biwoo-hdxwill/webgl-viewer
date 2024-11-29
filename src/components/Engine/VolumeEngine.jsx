@@ -167,8 +167,8 @@ function VolumeEngine({ volumeData }) {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
         gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
-        gl.uniform1f(programInfo.uniformLocations.stepSize, 0.01); // 스텝 사이즈 조정
-        gl.uniform1f(programInfo.uniformLocations.threshold, 0.15); // 임계값 조정
+        gl.uniform1f(programInfo.uniformLocations.stepSize, 0.005); // 스텝 사이즈 조정
+        gl.uniform1f(programInfo.uniformLocations.threshold, 0.1); // 임계값 조정
     
         // 버텍스 데이터 설정 및 렌더링
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
