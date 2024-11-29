@@ -20,42 +20,82 @@ uniform mat4 uRotationMatrix;
 
 out vec4 fragColor;
 
+vec3 transformPoint(vec3 p) {
+    vec4 transformed = uRotationMatrix * vec4(p * 2.0 - 1.0, 1.0);
+    return transformed.xyz / transformed.w * 0.5 + 0.5;
+}
+
 vec4 transferFunction(float intensity) {
-    vec3 color = vec3(intensity);
-    float alpha = intensity > uThreshold ? intensity : 0.0;
+    // 강도값에 따른 색상 매핑 개선
+    vec3 color;
+    float alpha;
+    
+    if (intensity < uThreshold) {
+        alpha = 0.0;
+        color = vec3(0.0);
+    } else {
+        // 뼈와 같은 고밀도 영역은 밝게, 연조직은 어둡게 표현
+        float normalizedIntensity = (intensity - uThreshold) / (1.0 - uThreshold);
+        
+        // 비선형 매핑으로 대비 향상
+        float contrast = pow(normalizedIntensity, 1.5);
+        
+        // 그레이스케일 값 설정
+        color = vec3(contrast);
+        
+        // 밀도에 따른 투명도 조절
+        alpha = normalizedIntensity * 0.15; // 투명도 계수 낮춤
+        
+        // 높은 밀도 영역의 투명도 강화
+        if (intensity > 0.75) {
+            alpha *= 2.0;
+        }
+    }
+    
     return vec4(color, alpha);
 }
 
 void main() {
-    vec3 rayStart = vec3(texcoord.x, texcoord.y, 0.0);
-    rayStart = (uRotationMatrix * vec4(rayStart, 1.0)).xyz;
-    rayStart = rayStart * 0.5 + 0.5;  // [-1,1] -> [0,1] 변환
-
+    // Calculate ray entry and exit points
+    vec3 rayStart = vec3(texcoord, -1.0);
+    vec3 rayEnd = vec3(texcoord, 1.0);
+    
+    // Transform ray points by rotation matrix
+    rayStart = transformPoint(rayStart);
+    rayEnd = transformPoint(rayEnd);
+    
+    // Calculate ray direction
+    vec3 rayDir = normalize(rayEnd - rayStart);
+    
+    // Ray casting
+    vec3 currentPos = rayStart;
     vec4 accumulatedColor = vec4(0.0);
-    vec3 currentPosition = rayStart;
-    vec3 rayDirection = vec3(0.0, 0.0, 1.0);
-    rayDirection = normalize((uRotationMatrix * vec4(rayDirection, 0.0)).xyz);
-
-    for(int i = 0; i < 512; i++) {
-        if(currentPosition.x < 0.0 || currentPosition.x > 1.0 ||
-           currentPosition.y < 0.0 || currentPosition.y > 1.0 ||
-           currentPosition.z < 0.0 || currentPosition.z > 1.0) {
-            break;
+    float stepSize = uStepSize;
+    
+    for(int i = 0; i < 1024; i++) {
+        // Check if ray is outside volume bounds
+        if(any(lessThan(currentPos, vec3(0.0))) || any(greaterThan(currentPos, vec3(1.0)))) {
+            currentPos += rayDir * stepSize;
+            continue;
         }
         
-        float intensity = texture(uVolumeTexture, currentPosition).r;
+        // Sample volume
+        float intensity = texture(uVolumeTexture, currentPos).r;
         vec4 sampledColor = transferFunction(intensity);
         
+        // Front-to-back composition
         accumulatedColor.rgb += (1.0 - accumulatedColor.a) * sampledColor.a * sampledColor.rgb;
         accumulatedColor.a += (1.0 - accumulatedColor.a) * sampledColor.a;
         
+        // Early ray termination
         if(accumulatedColor.a >= 0.95) break;
         
-        currentPosition += rayDirection * uStepSize;
+        currentPos += rayDir * stepSize;
     }
     
     fragColor = accumulatedColor;
-}`;
+}
+    `;
 
 export function initVolumeShaderProgram(gl, vsSource, fsSource) {
     const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
