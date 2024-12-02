@@ -116,6 +116,7 @@ function DicomView() {
                 const offset = i * firstImage.width * firstImage.height;
                 
                 for (let j = 0; j < pixelData.length; j++) {
+                    // DICOM의 raw 픽셀값을 HU로 변환하는 공식
                     let hounsfield = pixelData[j] * slope + intercept;
                     let normalized = (hounsfield - (windowCenter - 0.5)) / (windowWidth - 1.0);
                     normalized = ((normalized + 0.5) * 255.0) / 255.0;
@@ -125,12 +126,12 @@ function DicomView() {
             });
 
             setVolumeData({
-                data: volumeBuffer,
-                width: firstImage.width,
-                height: firstImage.height,
-                depth: images.length,
-                windowCenter,
-                windowWidth
+                data: volumeBuffer,         // WebGL의 3D 텍스처의 실제 데이터로 사용
+                width: firstImage.width,    // 3D 텍스처의 x 차원 크기 지정에 사용
+                height: firstImage.height,  // 3D 텍스처의 y 차원 크기 지정에 사용
+                depth: images.length,       // 3D 텍스처의 z 차원 크기 지정에 사용
+                windowCenter,               // 볼륨 렌더링의 밝기/대비 조절에 사용, 관심 영역의 중심값
+                windowWidth                 // 볼륨 렌더링의 밝기/대비 조절에 사용, 표시할 값의 범위
             });
 
             if (imageIds.length > 0) {
