@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { volumeVertexShaderSource, volumeFragmentShaderSource, initVolumeShaderProgram } from '../../utils/volumeShader';
-import { mat4 } from 'gl-matrix';
+import { mat4, vec3 } from 'gl-matrix';
 
 function VolumeEngine({ volumeData }) {
     const canvasRef = useRef(null);
@@ -11,8 +11,8 @@ function VolumeEngine({ volumeData }) {
     const bufferInfoRef = useRef(null);
     const volumeTextureRef = useRef(null);
     const animationFrameRef = useRef(null);
+    const arcballMatrixRef = useRef(mat4.create());
     
-    const [rotation, setRotation] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
@@ -26,6 +26,48 @@ function VolumeEngine({ volumeData }) {
             ])
         };
     }, []);
+
+    const getArcballVector = (x, y, width, height) => {
+        const point = vec3.fromValues(
+            (2.0 * x) / width - 1.0,
+            -((2.0 * y) / height - 1.0),
+            0.0
+        );
+
+        const squaredLength = point[0] * point[0] + point[1] * point[1];
+        
+        if (squaredLength <= 1.0) {
+            point[2] = Math.sqrt(1.0 - squaredLength);
+        } else {
+            vec3.normalize(point, point);
+        }
+
+        return point;
+    };
+
+    const calculateArcballRotation = (lastPos, currentPos, width, height) => {
+        const v1 = getArcballVector(lastPos.x, lastPos.y, width, height);
+        const v2 = getArcballVector(currentPos.x, currentPos.y, width, height);
+
+        const dot = vec3.dot(v1, v2);
+        if (Math.abs(dot - 1.0) < Number.EPSILON) {
+            return mat4.create();
+        }
+
+        // Calculate rotation axis
+        const rotationAxis = vec3.create();
+        vec3.cross(rotationAxis, v1, v2);
+        vec3.normalize(rotationAxis, rotationAxis);
+
+        // Calculate rotation angle
+        const angle = Math.acos(Math.min(1.0, dot));
+
+        // Create rotation matrix
+        const rotationMatrix = mat4.create();
+        mat4.rotate(rotationMatrix, rotationMatrix, angle, rotationAxis);
+
+        return rotationMatrix;
+    };
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -115,28 +157,38 @@ function VolumeEngine({ volumeData }) {
     };
 
     const handleMouseDown = (e) => {
+        const rect = canvasRef.current.getBoundingClientRect();
         setIsDragging(true);
         setLastMousePos({
-            x: e.clientX,
-            y: e.clientY
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
         });
     };
 
     const handleMouseMove = (e) => {
         if (!isDragging) return;
 
-        const deltaX = e.clientX - lastMousePos.x;
-        const deltaY = e.clientY - lastMousePos.y;
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const currentPos = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        
+        const rotationMatrix = calculateArcballRotation(
+            lastMousePos,
+            currentPos,
+            canvas.width,
+            canvas.height
+        );
 
-        setRotation(prev => ({
-            x: prev.x + deltaY * 0.5,
-            y: prev.y + deltaX * 0.5
-        }));
+        // Accumulate rotation
+        const newMatrix = mat4.create();
+        mat4.multiply(newMatrix, rotationMatrix, arcballMatrixRef.current);
+        arcballMatrixRef.current = newMatrix;
 
-        setLastMousePos({
-            x: e.clientX,
-            y: e.clientY
-        });
+        setLastMousePos(currentPos);
+        drawScene();
     };
 
     const handleMouseUp = () => {
@@ -156,25 +208,19 @@ function VolumeEngine({ volumeData }) {
     
         gl.useProgram(programInfo.program);
     
-        // 회전 행렬 계산
-        const rotationMatrix = mat4.create();
-        mat4.identity(rotationMatrix);
-        
-        // Y축 회전 (좌우)
-        mat4.rotateY(rotationMatrix, rotationMatrix, rotation.y * Math.PI / 180);
-        // X축 회전 (상하)
-        mat4.rotateX(rotationMatrix, rotationMatrix, rotation.x * Math.PI / 180);
-        // Z축 회전 (기울이기)
-        mat4.rotateZ(rotationMatrix, rotationMatrix, 0);
-    
-        gl.uniformMatrix4fv(programInfo.uniformLocations.rotationMatrix, false, rotationMatrix);
+        // Use accumulated arcball rotation matrix
+        gl.uniformMatrix4fv(
+            programInfo.uniformLocations.rotationMatrix,
+            false,
+            arcballMatrixRef.current
+        );
     
         // 렌더링 파라미터 설정
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
         gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
-        gl.uniform1f(programInfo.uniformLocations.stepSize, 0.005); // 스텝 사이즈 조정
-        gl.uniform1f(programInfo.uniformLocations.threshold, 0.1); // 임계값 조정
+        gl.uniform1f(programInfo.uniformLocations.stepSize, 0.005);
+        gl.uniform1f(programInfo.uniformLocations.threshold, 0.1);
     
         // 버텍스 데이터 설정 및 렌더링
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
@@ -197,14 +243,9 @@ function VolumeEngine({ volumeData }) {
     useEffect(() => {
         if (volumeData && glRef.current) {
             updateVolumeTexture(volumeData);
-        }
-    }, [volumeData]);
-
-    useEffect(() => {
-        if (glRef.current && programInfoRef.current) {
             drawScene();
         }
-    }, [rotation]);
+    }, [volumeData]);
 
     const cleanupWebGL = (gl) => {
         if (bufferInfoRef.current) {
