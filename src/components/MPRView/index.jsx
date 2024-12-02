@@ -11,6 +11,11 @@ function MPRView() {
     const [axialOffset, setAxialOffset] = useState(0.5);
     const [sagittalOffset, setSagittalOffset] = useState(0.5);
     const [coronalOffset, setCoronalOffset] = useState(0.5);
+    
+    const stepSize = volumeData ? 1 / (volumeData.depth - 1) : 0.01;
+    const getCurrentSliceNumber = (offset, totalSlices) => {
+        return Math.round(offset * (totalSlices - 1)) + 1;
+    };
 
     if (!volumeData) {
         return (
@@ -66,11 +71,14 @@ function MPRView() {
                             type="range"
                             min="0"
                             max="1"
-                            step="0.01"
+                            step={stepSize}
                             value={axialOffset}
                             onChange={(e) => setAxialOffset(parseFloat(e.target.value))}
                             style={{ width: '100%', marginTop: '10px' }}
                         />
+                        <div style={{ textAlign: 'center' }}>
+                            Slice: {getCurrentSliceNumber(axialOffset, volumeData.depth)} / {volumeData.depth}
+                        </div>
                     </div>
                     <div>
                         <h3 style={{ marginBottom: '10px' }}>Sagittal View</h3>
@@ -83,11 +91,14 @@ function MPRView() {
                             type="range"
                             min="0"
                             max="1"
-                            step="0.01"
+                            step={stepSize}
                             value={sagittalOffset}
                             onChange={(e) => setSagittalOffset(parseFloat(e.target.value))}
                             style={{ width: '100%', marginTop: '10px' }}
                         />
+                        <div style={{ textAlign: 'center' }}>
+                            Slice: {getCurrentSliceNumber(sagittalOffset, volumeData.depth)} / {volumeData.depth}
+                        </div>
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: '20px' }}>
@@ -102,11 +113,14 @@ function MPRView() {
                             type="range"
                             min="0"
                             max="1"
-                            step="0.01"
+                            step={stepSize}
                             value={coronalOffset}
                             onChange={(e) => setCoronalOffset(parseFloat(e.target.value))}
                             style={{ width: '100%', marginTop: '10px' }}
                         />
+                        <div style={{ textAlign: 'center' }}>
+                            Slice: {getCurrentSliceNumber(coronalOffset, volumeData.depth)} / {volumeData.depth}
+                        </div>
                     </div>
                     <div>
                         <h3 style={{ marginBottom: '10px' }}>3D Volume View</h3>
