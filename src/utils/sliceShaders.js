@@ -36,7 +36,6 @@ vec3 getViewCoordinate() {
     return coord;
 }
 
-// 감마 보정 함수 추가
 float gammaCorrect(float value) {
     return pow(value, 1.0/2.2);
 }

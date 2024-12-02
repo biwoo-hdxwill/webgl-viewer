@@ -1,5 +1,5 @@
 // src/components/Engine/VolumeEngine.jsx
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { volumeVertexShaderSource, volumeFragmentShaderSource, initVolumeShaderProgram } from '../../utils/volumeShader';
 import { mat4 } from 'gl-matrix';
@@ -15,6 +15,17 @@ function VolumeEngine({ volumeData }) {
     const [rotation, setRotation] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+
+    const glSetup = useMemo(() => {
+        return {
+            positions: new Float32Array([
+                -1.0, -1.0,
+                 1.0, -1.0,
+                -1.0,  1.0,
+                 1.0,  1.0,
+            ])
+        };
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -59,12 +70,7 @@ function VolumeEngine({ volumeData }) {
     }, []);
 
     const initBuffers = (gl) => {
-        const positions = new Float32Array([
-            -1.0, -1.0,
-             1.0, -1.0,
-            -1.0,  1.0,
-             1.0,  1.0,
-        ]);
+        const { positions } = glSetup;
 
         const positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);

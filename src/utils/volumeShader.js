@@ -40,10 +40,10 @@ vec4 transferFunction(float intensity) {
         float contrast = pow(normalizedIntensity, 2.0);
         
         // 뼈 색깔 더 밝게
-        color = vec3(contrast * 5.0);  // 전체적인 밝기 20% 증가
+        color = vec3(contrast * 5.0);
         
         // 투명도
-        alpha = normalizedIntensity * 0.25;  // 0.15에서 0.25로 증가
+        alpha = normalizedIntensity * 0.25;
         
         // 고밀도 영역의 투명도와 대비 강화
         if (intensity > 0.6) {  // 고밀도 기준 임계값

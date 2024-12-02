@@ -17,7 +17,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     const volumeTextureRef = useRef(null);
     const renderRequestRef = useRef(null);
 
-    // WebGL 초기화 및 설정을 메모이제이션
+    // WebGL 초기화 및 설정을 메모하여 최적화
     const glSetup = useMemo(() => {
         return {
             positions: new Float32Array([
@@ -38,9 +38,9 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     useEffect(() => {
         const canvas = canvasRef.current;
         const gl = canvas.getContext('webgl2', {
-            antialias: true,  // 안티앨리어싱 비활성화로 성능 향상
-            depth: true,      // depth testing 불필요
-            alpha: true       // alpha channel 불필요
+            antialias: true,  // 안티앨리어싱
+            depth: true,      // depth testing
+            alpha: true       // alpha channel
         });
         
         if (!gl) {
@@ -51,6 +51,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         gl.getExtension('EXT_color_buffer_float');
         
         glRef.current = gl;
+        // slice shader 연결
         const program = initSliceShaderProgram(gl, sliceVertexShaderSource, sliceFragmentShaderSource);
         
         programInfoRef.current = {
@@ -75,6 +76,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     }, []);
 
     useEffect(() => {
+        // volumeData가 변경될 때 마다 실행됨
         if (volumeData && glRef.current) {
             updateVolumeTexture(volumeData);
         }
@@ -105,6 +107,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     };
 
     const updateVolumeTexture = (volumeData) => {
+         // 3D 볼륨 데이터를 WebGL 텍스처로 변환하여 GPU 메모리에 업로드
         const gl = glRef.current;
 
         if (volumeTextureRef.current) {
@@ -114,7 +117,6 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         const texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_3D, texture);
 
-        // 텍스처 포맷 최적화
         gl.texImage3D(
             gl.TEXTURE_3D,
             0,
@@ -128,7 +130,6 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
             volumeData.data
         );
 
-        // 텍스처 필터링 최적화
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
