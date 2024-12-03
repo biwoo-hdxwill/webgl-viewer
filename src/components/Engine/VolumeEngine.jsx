@@ -14,8 +14,10 @@ function VolumeEngine({ volumeData }) {
     const arcballMatrixRef = useRef(mat4.create());
     
     const [isDragging, setIsDragging] = useState(false);
+    const [isPanning, setIsPanning] = useState(false);
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
     const [scale, setScale] = useState(1.0);
+    const [panPosition, setPanPosition] = useState({ x: 0, y: 0, z: 0 });
 
     const glSetup = useMemo(() => {
         return {
@@ -67,7 +69,6 @@ function VolumeEngine({ volumeData }) {
         return rotationMatrix;
     };
 
-    // Wheel 이벤트 핸들러 추가
     const handleWheel = (e) => {
         e.preventDefault();
         const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
@@ -114,7 +115,8 @@ function VolumeEngine({ volumeData }) {
                 volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture'),
                 stepSize: gl.getUniformLocation(program, 'uStepSize'),
                 threshold: gl.getUniformLocation(program, 'uThreshold'),
-                scale: gl.getUniformLocation(program, 'uScale')
+                scale: gl.getUniformLocation(program, 'uScale'),
+                panPosition: gl.getUniformLocation(program, 'uPanPosition')
             },
         };
 
@@ -128,6 +130,7 @@ function VolumeEngine({ volumeData }) {
 
     const resetView = () => {
         setScale(1.0);
+        setPanPosition({ x: 0, y: 0, z: 0 });
         arcballMatrixRef.current = mat4.create();
         drawScene();
     };
@@ -179,40 +182,66 @@ function VolumeEngine({ volumeData }) {
 
     const handleMouseDown = (e) => {
         const rect = canvasRef.current.getBoundingClientRect();
-        setIsDragging(true);
-        setLastMousePos({
+        const mousePos = {
             x: e.clientX - rect.left,
             y: e.clientY - rect.top
-        });
+        };
+
+        if (e.button === 0) { // 좌클릭 - 패닝
+            setIsPanning(true);
+        } else if (e.button === 2) { // 우클릭 - 회전
+            setIsDragging(true);
+            e.preventDefault(); // 컨텍스트 메뉴 방지
+        }
+        
+        setLastMousePos(mousePos);
     };
 
     const handleMouseMove = (e) => {
-        if (!isDragging) return;
-
         const canvas = canvasRef.current;
         const rect = canvas.getBoundingClientRect();
         const currentPos = {
             x: e.clientX - rect.left,
             y: e.clientY - rect.top
         };
-        
-        const rotationMatrix = calculateArcballRotation(
-            lastMousePos,
-            currentPos,
-            canvas.width,
-            canvas.height
-        );
 
-        const newMatrix = mat4.create();
-        mat4.multiply(newMatrix, rotationMatrix, arcballMatrixRef.current);
-        arcballMatrixRef.current = newMatrix;
+        if (isDragging) { // 회전 (우클릭)
+            const rotationMatrix = calculateArcballRotation(
+                lastMousePos,
+                currentPos,
+                canvas.width,
+                canvas.height
+            );
+
+            const newMatrix = mat4.create();
+            mat4.multiply(newMatrix, rotationMatrix, arcballMatrixRef.current);
+            arcballMatrixRef.current = newMatrix;
+        } else if (isPanning) { // 패닝 (좌클릭)
+            // 마우스 이동 거리 계산 (방향 수정)
+            const dx = -(currentPos.x - lastMousePos.x) / canvas.width * 0.5;
+            const dy = (currentPos.y - lastMousePos.y) / canvas.height * 0.5;
+            
+            setPanPosition(prev => ({
+                x: prev.x + dx,
+                y: prev.y + dy,
+                z: prev.z
+            }));
+        }
 
         setLastMousePos(currentPos);
         drawScene();
     };
 
-    const handleMouseUp = () => {
-        setIsDragging(false);
+    const handleMouseUp = (e) => {
+        if (e.button === 0) {
+            setIsPanning(false);
+        } else if (e.button === 2) {
+            setIsDragging(false);
+        }
+    };
+
+    const handleContextMenu = (e) => {
+        e.preventDefault(); // 우클릭 메뉴 방지
     };
 
     const drawScene = () => {
@@ -235,6 +264,12 @@ function VolumeEngine({ volumeData }) {
         );
     
         gl.uniform1f(programInfo.uniformLocations.scale, scale);
+        gl.uniform3f(
+            programInfo.uniformLocations.panPosition, 
+            panPosition.x, 
+            panPosition.y, 
+            panPosition.z
+        );
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
         gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
@@ -269,7 +304,7 @@ function VolumeEngine({ volumeData }) {
         if (glRef.current && programInfoRef.current) {
             drawScene();
         }
-    }, [scale]);
+    }, [scale, panPosition]);
 
     const cleanupWebGL = (gl) => {
         if (bufferInfoRef.current) {
@@ -292,12 +327,13 @@ function VolumeEngine({ volumeData }) {
                 style={{
                     border: '2px solid #666',
                     background: '#000',
-                    cursor: isDragging ? 'grabbing' : 'grab'
+                    cursor: isDragging ? 'grabbing' : isPanning ? 'move' : 'grab'
                 }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onContextMenu={handleContextMenu}
             />
             <button
                 onClick={resetView}

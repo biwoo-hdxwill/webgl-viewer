@@ -3,6 +3,7 @@ export const volumeVertexShaderSource = `#version 300 es
 in vec2 aVertexPosition;
 
 uniform float uScale;
+uniform vec3 uPanPosition;
 
 out vec2 texcoord;
 
@@ -21,12 +22,13 @@ uniform sampler3D uVolumeTexture;
 uniform float uStepSize;
 uniform float uThreshold;
 uniform mat4 uRotationMatrix;
+uniform vec3 uPanPosition;
 
 out vec4 fragColor;
 
 vec3 transformPoint(vec3 p) {
     vec4 transformed = uRotationMatrix * vec4(p * 2.0 - 1.0, 1.0);
-    return transformed.xyz / transformed.w * 0.5 + 0.5;
+    return (transformed.xyz / transformed.w * 0.5 + 0.5) + uPanPosition;
 }
 
 vec4 transferFunction(float intensity) {
