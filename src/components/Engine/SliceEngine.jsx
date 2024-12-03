@@ -17,11 +17,43 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     const volumeTextureRef = useRef(null);
     const renderRequestRef = useRef(null);
     const [scale, setScale] = useState(1.0);
+    const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+    const isDraggingRef = useRef(false);
+    const lastMousePosRef = useRef({ x: 0, y: 0 });
 
     const handleWheel = (e) => {
         e.preventDefault();
         const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
         setScale(prevScale => Math.max(0.1, Math.min(5.0, prevScale * scaleFactor)));
+    };
+
+    const handleMouseDown = (e) => {
+        isDraggingRef.current = true;
+        lastMousePosRef.current = {
+            x: e.clientX,
+            y: e.clientY
+        };
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDraggingRef.current) return;
+
+        const dx = (e.clientX - lastMousePosRef.current.x) / canvasRef.current.width;
+        const dy = (e.clientY - lastMousePosRef.current.y) / canvasRef.current.height;
+
+        setPanPosition(prev => ({
+            x: prev.x + dx,
+            y: prev.y - dy
+        }));
+
+        lastMousePosRef.current = {
+            x: e.clientX,
+            y: e.clientY
+        };
+    };
+
+    const handleMouseUp = () => {
+        isDraggingRef.current = false;
     };
 
     // WebGL 초기화 및 설정을 메모하여 최적화
@@ -45,18 +77,26 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     useEffect(() => {
         const canvas = canvasRef.current;
         canvas.addEventListener('wheel', handleWheel);
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('mouseleave', handleMouseUp);
         
         return () => {
             canvas.removeEventListener('wheel', handleWheel);
+            canvas.removeEventListener('mousedown', handleMouseDown);
+            canvas.removeEventListener('mousemove', handleMouseMove);
+            canvas.removeEventListener('mouseup', handleMouseUp);
+            canvas.removeEventListener('mouseleave', handleMouseUp);
         };
     }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
         const gl = canvas.getContext('webgl2', {
-            antialias: true,  // 안티앨리어싱
-            depth: true,      // depth testing
-            alpha: true       // alpha channel
+            antialias: true,
+            depth: true,
+            alpha: true
         });
         
         if (!gl) {
@@ -67,7 +107,6 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         gl.getExtension('EXT_color_buffer_float');
         
         glRef.current = gl;
-        // slice shader 연결
         const program = initSliceShaderProgram(gl, sliceVertexShaderSource, sliceFragmentShaderSource);
         
         programInfoRef.current = {
@@ -80,7 +119,8 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
                 viewType: gl.getUniformLocation(program, 'uViewType'),
                 sliceOffset: gl.getUniformLocation(program, 'uSliceOffset'),
                 volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture'),
-                scale: gl.getUniformLocation(program, 'uScale')
+                scale: gl.getUniformLocation(program, 'uScale'),
+                panPosition: gl.getUniformLocation(program, 'uPanPosition')
             },
         };
 
@@ -93,7 +133,6 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     }, []);
 
     useEffect(() => {
-        // volumeData가 변경될 때 마다 실행됨
         if (volumeData && glRef.current) {
             updateVolumeTexture(volumeData);
         }
@@ -103,7 +142,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         if (glRef.current && programInfoRef.current) {
             renderRequestRef.current = requestAnimationFrame(drawScene);
         }
-    }, [sliceOffset, viewType, scale]);
+    }, [sliceOffset, viewType, scale, panPosition]);
 
     const initBuffers = (gl) => {
         const { positions, texCoords } = glSetup;
@@ -124,7 +163,6 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     };
 
     const updateVolumeTexture = (volumeData) => {
-         // 3D 볼륨 데이터를 WebGL 텍스처로 변환하여 GPU 메모리에 업로드
         const gl = glRef.current;
 
         if (volumeTextureRef.current) {
@@ -179,6 +217,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         gl.uniform1f(programInfo.uniformLocations.sliceOffset, sliceOffset);
         gl.uniform1i(programInfo.uniformLocations.viewType, getViewTypeValue());
         gl.uniform1f(programInfo.uniformLocations.scale, scale);
+        gl.uniform2f(programInfo.uniformLocations.panPosition, panPosition.x, panPosition.y);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
@@ -222,6 +261,11 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         }
     };
 
+    const handleReset = () => {
+        setScale(1.0);
+        setPanPosition({ x: 0, y: 0 });
+    };
+
     return (
         <div style={{ position: 'relative' }}>
             <canvas
@@ -234,7 +278,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
                 }}
             />
             <button
-                onClick={() => setScale(1.0)}
+                onClick={handleReset}
                 style={{
                     position: 'absolute',
                     top: '10px',

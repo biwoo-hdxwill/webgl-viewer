@@ -4,11 +4,12 @@ in vec2 aVertexPosition;
 in vec2 aTextureCoord;
 
 uniform float uScale;
+uniform vec2 uPanPosition;
 
 out vec2 vTextureCoord;
 
 void main() {
-    vec2 position = aVertexPosition * uScale;
+    vec2 position = aVertexPosition * uScale + uPanPosition;
     gl_Position = vec4(position, 0.0, 1.0);
     vTextureCoord = aTextureCoord;
 }`;
