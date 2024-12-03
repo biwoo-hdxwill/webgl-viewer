@@ -167,8 +167,7 @@ function DicomView() {
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileSelect}
-                    webkitdirectory=""
-                    directory=""
+                    webkitdirectory="true"
                     multiple
                     style={{ marginRight: '10px' }}
                 />
