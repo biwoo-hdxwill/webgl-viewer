@@ -3,10 +3,13 @@ export const sliceVertexShaderSource = `#version 300 es
 in vec2 aVertexPosition;
 in vec2 aTextureCoord;
 
+uniform float uScale;
+
 out vec2 vTextureCoord;
 
 void main() {
-    gl_Position = vec4(aVertexPosition, 0.0, 1.0);
+    vec2 position = aVertexPosition * uScale;
+    gl_Position = vec4(position, 0.0, 1.0);
     vTextureCoord = aTextureCoord;
 }`;
 

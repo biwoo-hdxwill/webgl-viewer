@@ -1,5 +1,5 @@
 // src/components/Engine/SliceEngine.jsx
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { sliceVertexShaderSource, sliceFragmentShaderSource, initSliceShaderProgram } from '../../utils/sliceShaders';
 
@@ -16,6 +16,13 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     const bufferInfoRef = useRef(null);
     const volumeTextureRef = useRef(null);
     const renderRequestRef = useRef(null);
+    const [scale, setScale] = useState(1.0);
+
+    const handleWheel = (e) => {
+        e.preventDefault();
+        const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        setScale(prevScale => Math.max(0.1, Math.min(5.0, prevScale * scaleFactor)));
+    };
 
     // WebGL 초기화 및 설정을 메모하여 최적화
     const glSetup = useMemo(() => {
@@ -32,6 +39,15 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
                 0.0, 1.0,
                 1.0, 1.0,
             ])
+        };
+    }, []);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        canvas.addEventListener('wheel', handleWheel);
+        
+        return () => {
+            canvas.removeEventListener('wheel', handleWheel);
         };
     }, []);
 
@@ -63,7 +79,8 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
             uniformLocations: {
                 viewType: gl.getUniformLocation(program, 'uViewType'),
                 sliceOffset: gl.getUniformLocation(program, 'uSliceOffset'),
-                volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture')
+                volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture'),
+                scale: gl.getUniformLocation(program, 'uScale')
             },
         };
 
@@ -86,7 +103,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         if (glRef.current && programInfoRef.current) {
             renderRequestRef.current = requestAnimationFrame(drawScene);
         }
-    }, [sliceOffset, viewType]);
+    }, [sliceOffset, viewType, scale]);
 
     const initBuffers = (gl) => {
         const { positions, texCoords } = glSetup;
@@ -161,6 +178,7 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
         gl.useProgram(programInfo.program);
         gl.uniform1f(programInfo.uniformLocations.sliceOffset, sliceOffset);
         gl.uniform1i(programInfo.uniformLocations.viewType, getViewTypeValue());
+        gl.uniform1f(programInfo.uniformLocations.scale, scale);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
@@ -205,15 +223,33 @@ function SliceEngine({ volumeData, sliceOffset = 0.5, viewType = ViewTypes.AXIAL
     };
 
     return (
-        <canvas
-            ref={canvasRef}
-            width={512}
-            height={512}
-            style={{
-                border: '2px solid #666',
-                background: '#000'
-            }}
-        />
+        <div style={{ position: 'relative' }}>
+            <canvas
+                ref={canvasRef}
+                width={512}
+                height={512}
+                style={{
+                    border: '2px solid #666',
+                    background: '#000'
+                }}
+            />
+            <button
+                onClick={() => setScale(1.0)}
+                style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    padding: '5px 10px',
+                    background: '#4A90E2',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                }}
+            >
+                Reset View
+            </button>
+        </div>
     );
 }
 
