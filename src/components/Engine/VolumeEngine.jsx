@@ -15,6 +15,7 @@ function VolumeEngine({ volumeData }) {
     
     const [isDragging, setIsDragging] = useState(false);
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+    const [scale, setScale] = useState(1.0);
 
     const glSetup = useMemo(() => {
         return {
@@ -54,20 +55,33 @@ function VolumeEngine({ volumeData }) {
             return mat4.create();
         }
 
-        // Calculate rotation axis
         const rotationAxis = vec3.create();
         vec3.cross(rotationAxis, v1, v2);
         vec3.normalize(rotationAxis, rotationAxis);
 
-        // Calculate rotation angle
         const angle = Math.acos(Math.min(1.0, dot));
 
-        // Create rotation matrix
         const rotationMatrix = mat4.create();
         mat4.rotate(rotationMatrix, rotationMatrix, angle, rotationAxis);
 
         return rotationMatrix;
     };
+
+    // Wheel 이벤트 핸들러 추가
+    const handleWheel = (e) => {
+        e.preventDefault();
+        const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        setScale(prevScale => Math.max(0.1, Math.min(5.0, prevScale * scaleFactor)));
+    };
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        canvas.addEventListener('wheel', handleWheel);
+        
+        return () => {
+            canvas.removeEventListener('wheel', handleWheel);
+        };
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -100,6 +114,7 @@ function VolumeEngine({ volumeData }) {
                 volumeTexture: gl.getUniformLocation(program, 'uVolumeTexture'),
                 stepSize: gl.getUniformLocation(program, 'uStepSize'),
                 threshold: gl.getUniformLocation(program, 'uThreshold'),
+                scale: gl.getUniformLocation(program, 'uScale')
             },
         };
 
@@ -110,6 +125,12 @@ function VolumeEngine({ volumeData }) {
             cleanupWebGL(gl);
         };
     }, []);
+
+    const resetView = () => {
+        setScale(1.0);
+        arcballMatrixRef.current = mat4.create();
+        drawScene();
+    };
 
     const initBuffers = (gl) => {
         const { positions } = glSetup;
@@ -182,7 +203,6 @@ function VolumeEngine({ volumeData }) {
             canvas.height
         );
 
-        // Accumulate rotation
         const newMatrix = mat4.create();
         mat4.multiply(newMatrix, rotationMatrix, arcballMatrixRef.current);
         arcballMatrixRef.current = newMatrix;
@@ -208,21 +228,19 @@ function VolumeEngine({ volumeData }) {
     
         gl.useProgram(programInfo.program);
     
-        // Use accumulated arcball rotation matrix
         gl.uniformMatrix4fv(
             programInfo.uniformLocations.rotationMatrix,
             false,
             arcballMatrixRef.current
         );
     
-        // 렌더링 파라미터 설정
+        gl.uniform1f(programInfo.uniformLocations.scale, scale);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_3D, volumeTextureRef.current);
         gl.uniform1i(programInfo.uniformLocations.volumeTexture, 0);
         gl.uniform1f(programInfo.uniformLocations.stepSize, 0.005);
         gl.uniform1f(programInfo.uniformLocations.threshold, 0.1);
     
-        // 버텍스 데이터 설정 및 렌더링
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
         gl.vertexAttribPointer(
             programInfo.attribLocations.vertexPosition,
@@ -247,6 +265,12 @@ function VolumeEngine({ volumeData }) {
         }
     }, [volumeData]);
 
+    useEffect(() => {
+        if (glRef.current && programInfoRef.current) {
+            drawScene();
+        }
+    }, [scale]);
+
     const cleanupWebGL = (gl) => {
         if (bufferInfoRef.current) {
             gl.deleteBuffer(bufferInfoRef.current.position);
@@ -260,20 +284,38 @@ function VolumeEngine({ volumeData }) {
     };
 
     return (
-        <canvas
-            ref={canvasRef}
-            width={512}
-            height={512}
-            style={{
-                border: '2px solid #666',
-                background: '#000',
-                cursor: isDragging ? 'grabbing' : 'grab'
-            }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-        />
+        <div style={{ position: 'relative' }}>
+            <canvas
+                ref={canvasRef}
+                width={512}
+                height={512}
+                style={{
+                    border: '2px solid #666',
+                    background: '#000',
+                    cursor: isDragging ? 'grabbing' : 'grab'
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+            />
+            <button
+                onClick={resetView}
+                style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    padding: '5px 10px',
+                    background: '#4A90E2',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                }}
+            >
+                Reset View
+            </button>
+        </div>
     );
 }
 

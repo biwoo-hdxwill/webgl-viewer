@@ -1,10 +1,14 @@
 // src/utils/volumeShader.js
 export const volumeVertexShaderSource = `#version 300 es
 in vec2 aVertexPosition;
+
+uniform float uScale;
+
 out vec2 texcoord;
 
 void main() {
-    gl_Position = vec4(aVertexPosition, 0.0, 1.0);
+    vec2 position = aVertexPosition * uScale;
+    gl_Position = vec4(position, 0.0, 1.0);
     texcoord = (aVertexPosition + 1.0) * 0.5;
 }`;
 
